@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 # 查用户是否已经打卡
 def check_sign(check_sign_token, sign_type):
-    check_sign_url = "https://api.moguding.net:9000/attendence/clock/v2/listSynchro"
+    check_sign_url = "https://api.moguding.net/attendence/clock/v2/listSynchro"
     # 获取整个月的打卡信息
     # search_start_time, search_end_time = get_current_month()
 
