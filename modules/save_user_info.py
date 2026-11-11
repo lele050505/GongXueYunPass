@@ -50,4 +50,5 @@ def save_user_info(
         url, headers=headers, data=json.dumps(data), verify=False
     )
     res_text = res.text
+    print(f"[CLOCK_API_RAW] status={res.status_code} body={res.text}", flush=True)
     return res, res_text, res
