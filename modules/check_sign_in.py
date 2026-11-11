@@ -23,6 +23,8 @@ def check_sign(check_sign_token, sign_type):
     # dprint(response_data)
 
     # 检查是否有过打卡记录
+    if not isinstance(response_data, dict) or 'data' not in response_data or not response_data['data']:
+        return False
     for record in response_data["data"]:
         if record["type"] == sign_type:
             # 打过卡
