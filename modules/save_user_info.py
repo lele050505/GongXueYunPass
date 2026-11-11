@@ -18,7 +18,8 @@ def save_user_info(
 ):
     text = device + signType + planId + userId + address
     headers = {
-        "roleKey": "student",
+        "roleKey": "student","version": "5.43.6",
+        
         "user-agent": header_user_agent(user),
         "sign": create_sign(text),
         "authorization": token,
