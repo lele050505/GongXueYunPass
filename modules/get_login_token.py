@@ -32,7 +32,7 @@ def get_token(user):
         "loginType": "android",
         "uuid": str(uuid.uuid4()).replace("-", ""),
         "device": "android",
-        "version": "5.15.0",
+        "version": "5.43.6",
         "t": aes_encrypt(str(int(time.time() * 1000))),
     }
     rsp = _post_request(
