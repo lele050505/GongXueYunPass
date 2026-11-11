@@ -1,39 +1,49 @@
-name: "打卡"
+name: GongXueYun Checkin
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ main ]
   schedule:
-    - cron: "50 23 * * *"  # 上班卡-每天7点50分
-    - cron: "05 00 * * *"  # 额外打卡检查(避免漏签)-每天8点05分
-    - cron: "01 10 * * *"  # 下班卡-每天18点01分
-    - cron: "30 10 * * *"  # 额外打卡检查(避免漏签)-每天18点30分
+    - cron: '30 0 * * 1-5'
+    - cron: '30 9 * * 1-5'
 
 jobs:
-  build:
+  checkin:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python 3.8
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.8'
-        
-    - name: Install depend
-      run: |
-        pip install certifi
-        pip install cffi
-        pip install charset-normalizer
-        pip install cryptography
-        pip install idna
-        pip install numpy
-        pip install opencv-python
-        pip install pycparser
-        pip install requests
-        pip install urllib3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Start sign
-      env:
-        USER: ${{ secrets.USER }}
-      run: |
-        python index.py
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: |
+          python -m unittest discover -s tests -v
+
+      - name: Run checkin script
+        env:
+          USER: ${{ secrets.USER }}
+          PHONE: ${{ secrets.PHONE }}
+          PASSWORD: ${{ secrets.PASSWORD }}
+          PROVINCE: ${{ secrets.PROVINCE }}
+          CITY: ${{ secrets.CITY }}
+          AREA: ${{ secrets.AREA }}
+          ADDRESS: ${{ secrets.ADDRESS }}
+          LONGITUDE: ${{ secrets.LONGITUDE }}
+          LATITUDE: ${{ secrets.LATITUDE }}
+          DEVICE: ${{ secrets.DEVICE }}
+          DESCRIPTION: ${{ secrets.DESCRIPTION }}
+          SENDKEY: ${{ secrets.SENDKEY }}
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+        run: |
+          python index.py
