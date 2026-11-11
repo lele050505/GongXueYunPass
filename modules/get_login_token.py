@@ -9,12 +9,12 @@ request_headers = {
     "user-agent": "Dart/2.17 (dart:io)",
     "content-type": "application/json; charset=utf-8",
     "accept-encoding": "gzip",
-    "host": "api.moguding.net:9000",
+    "host": "api.moguding.net",
 }
 
-login_url = "https://api.moguding.net:9000/session/user/v6/login"
-captcha_url = "https://api.moguding.net:9000/session/captcha/v1/get"
-check_slider_url = "https://api.moguding.net:9000/session/captcha/v1/check"
+login_url = "https://api.moguding.net/session/user/v6/login"
+captcha_url = "https://api.moguding.net/session/captcha/v1/get"
+check_slider_url = "https://api.moguding.net/session/captcha/v1/check"
 
 
 def _post_request(url, headers, data, error_message):
