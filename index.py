@@ -1,3 +1,29 @@
+import time
+import requests
+_orig_post = requests.post
+_orig_get = requests.get
+def _retry_post(*args, **kwargs):
+    kwargs.setdefault("timeout", 15)
+    for i in range(5):
+        try:
+            return _orig_post(*args, **kwargs)
+        except Exception as e:
+            print(f"[RETRY_POST {i+1}/5] {type(e).__name__}: {e}", flush=True)
+            if i == 4:
+                raise
+            time.sleep(2)
+def _retry_get(*args, **kwargs):
+    kwargs.setdefault("timeout", 15)
+    for i in range(5):
+        try:
+            return _orig_get(*args, **kwargs)
+        except Exception as e:
+            print(f"[RETRY_GET {i+1}/5] {type(e).__name__}: {e}", flush=True)
+            if i == 4:
+                raise
+            time.sleep(2)
+requests.post = _retry_post
+requests.get = _retry_get
 import socket
 import urllib3.util.connection as urllib3_cn
 urllib3_cn.allowed_gai_family = lambda: socket.AF_INET
