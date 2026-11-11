@@ -16,14 +16,14 @@ def save_user_info(
     latitude=None,
     longitude=None,
 ):
-    url = "https://" + "api.moguding.net:9000/attendence/clock/v6/save"
+    url = "https://" + "api.moguding.net/attendence/clock/v6/save"
     text = device + signType + planId + userId + address
     headers = {
         "roleKey": "student",
         "version": "5.43.6",
         "user-agent": "Dart/2.17 (dart:io)",
         "accept-encoding": "gzip",
-        "host": "api.moguding.net:9000",
+        "host": "api.moguding.net",
         "sign": create_sign(text),
         "authorization": token,
         "content-type": "application/json; charset=utf-8",
