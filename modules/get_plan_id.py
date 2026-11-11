@@ -2,9 +2,9 @@ import json, requests
 from modules.map_headers import header_user_agent
 
 
-# 获取planId, 忘了干啥的
+# 获取planId，忘了干啥的
 def get_plan_id(user, token: str, sign: str):
-    url = "https://api.moguding.net/practice/plan/v3/getPlanByStu"
+    url = "https://api.moguding.net:9000/practice/plan/v3/getPlanByStu"
     data = {"state": ""}
     headers2 = {
         "roleKey": "student",
