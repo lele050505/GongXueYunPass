@@ -82,7 +82,7 @@ def send_sign_in(user_info, timeout):
             global_sign_results.append(error_message)
             return
         # 打印完整的打卡响应内容
-                dprint(f"{user_info_prefix}打卡响应状态: {signResp.status_code}, 响应内容: {msg}\n")
+            dprint(f"{user_info_prefix}打卡响应状态: {signResp.status_code}, 响应内容: {msg}\n")
         # 构建推送消息
         pushSignType = "上班" if signType == "START" else "下班"
         pushSignIsOK = "成功！" if signResp else "失败！"
