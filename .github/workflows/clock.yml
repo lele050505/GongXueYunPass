@@ -45,5 +45,6 @@ jobs:
           DESCRIPTION: ${{ secrets.DESCRIPTION }}
           SENDKEY: ${{ secrets.SENDKEY }}
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          OUT_REGISTER_NO: ${{ secrets.OUT_REGISTER_NO }}
         run: |
           python index.py
