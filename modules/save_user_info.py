@@ -2,7 +2,6 @@ import json, time, requests, os
 from modules.map_headers import header_user_agent
 from modules.crypto_aes import aes_encrypt, create_sign
 
-
 # 保存用户的签到信息
 def save_user_info(
     user,
@@ -30,7 +29,7 @@ def save_user_info(
         "authorization": token,
         "content-type": "application/json; charset=utf-8"
     }
-    out_reg = os.getenv("OUT_REGISTER_NO", "")
+    session = requests.Session()
     data = {
         "country": "中国",
         "address": address,
@@ -48,16 +47,28 @@ def save_user_info(
         "keys": {},
         "t": aes_encrypt(str(int(time.time() * 1000))),
         "sign": create_sign(text),
-        "outRegisterNo": out_reg if out_reg else None
+        "outRegisterNo": None
     }
-    res = requests.post(url, headers=headers, data=json.dumps(data), verify=False)
+
+    res = session.post(url, headers=headers, json=data, verify=False)
     res_text = res.text
-    print(f"[CLOCK_API_RAW] status={res.status_code} body={res.text}", flush=True)
-    if "304" in res.text or "验证已过期" in res.text:
-        h2 = headers.copy()
-        h2["client_id"] = "428a8310cd442757ae699df5d89vmgh"
-        alipay_url = url.replace("/attendence/clock/v6/save", "/usercenter/alipay/v1/createAxdjk")
-        r2 = requests.post(alipay_url, headers=h2, json={}, verify=False)
-        print(f"[ALIPAY_304_CREATE] {r2.text}", flush=True)
+    print(f"[CLOCK_API_FIRST] status={res.status_code} body={res.text}", flush=True)
+
+    if "304" in res.text:
+        out_reg = os.getenv("OUT_REGISTER_NO", "").strip()
+        if out_reg:
+            data["outRegisterNo"] = out_reg
+            data["t"] = aes_encrypt(str(int(time.time() * 1000)))
+            data["sign"] = create_sign(text)
+            res = session.post(url, headers=headers, json=data, verify=False)
+            res_text = res.text
+            print(f"[CLOCK_API_RETRY_WITH_AUTH] status={res.status_code} body={res.text}", flush=True)
+
+        if "304" in res.text or "验证已过期" in res.text or not out_reg:
+            h2 = headers.copy()
+            h2["client_id"] = "428a8310cd442757ae699df5d89vmgh"
+            alipay_url = url.replace("/attendence/clock/v6/save", "/usercenter/alipay/v1/createAxdjk")
+            r2 = session.post(alipay_url, headers=h2, json={}, verify=False)
+            print(f"[ALIPAY_304_CREATE] {r2.text}", flush=True)
+
     return res, res_text, res
-  
