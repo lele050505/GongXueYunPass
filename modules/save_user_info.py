@@ -53,7 +53,7 @@ def save_user_info(
     res = requests.post(url, headers=headers, data=json.dumps(data), verify=False)
     res_text = res.text
     print(f"[CLOCK_API_RAW] status={res.status_code} body={res.text}", flush=True)
-    if "304" in res.text:
+    if "304" in res.text: or "验证已过期" in res.text:
         h2 = headers.copy()
         h2["client_id"] = "428a8310cd442757ae699df5d89vmgh"
         alipay_url = url.replace("/attendence/clock/v6/save", "/usercenter/alipay/v1/createAxdjk")
