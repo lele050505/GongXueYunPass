@@ -47,5 +47,7 @@ jobs:
         PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
         OUT_REGISTER_NO: ${{ secrets.OUT_REGISTER_NO }}
         SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+       PROXY_URL: ${{ secrets.PROXY_URL }}
+       PROXY_API_URL: ${{ secrets.PROXY_API_URL }}
       run: |
         python gongxueyun_auto.py --mode auto
