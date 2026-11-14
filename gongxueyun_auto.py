@@ -11,6 +11,56 @@ import compat_adapter
 from modules.load_config import load_config
 from modules.send_sign_in_threading import send_sign_in_threading
 
+import socket
+
+def discover_free_domestic_proxy():
+    print("[PROXY] 启动全免费国内代理自动发现引擎...")
+    sources = [
+        "https://proxylist.geonode.com/api/proxy-list?country=CN&limit=20&page=1&sort_by=lastChecked&sort_type=desc",
+        "https://raw.githubusercontent.com/fate0/proxylist/master/proxy.list"
+    ]
+    for url in sources:
+        try:
+            resp = requests.get(url, timeout=6)
+            if "geonode" in url:
+                data = resp.json().get("data", [])
+                for item in data:
+                    ip = item.get("ip")
+                    port = item.get("port")
+                    proto = (item.get("protocols") or ["http"])[0]
+                    try:
+                        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        s.settimeout(1.2)
+                        s.connect((ip, int(port)))
+                        s.close()
+                        proxy_cand = f"{proto}://{ip}:{port}"
+                        city = item.get("city", "CN")
+                        print(f"[PROXY] [FREE_ENGINE] 成功匹配并测通国内免费代理: {proxy_cand} (地区: {city})")
+                        return proxy_cand
+                    except Exception:
+                        continue
+            elif "fate0" in url:
+                lines = resp.text.splitlines()
+                for line in lines[:30]:
+                    try:
+                        item = json.loads(line)
+                        if item.get("country") == "CN":
+                            ip = item.get("host")
+                            port = item.get("port")
+                            proto = item.get("type", "http")
+                            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                            s.settimeout(1.2)
+                            s.connect((ip, int(port)))
+                            s.close()
+                            proxy_cand = f"{proto}://{ip}:{port}"
+                            print(f"[PROXY] [FREE_ENGINE] 成功匹配并测通国内免费代理: {proxy_cand}")
+                            return proxy_cand
+                    except Exception:
+                        continue
+        except Exception as e:
+            print(f"[PROXY] 查询免费代理源异常: {e}")
+    return None
+
 def setup_proxy():
     proxy_url = os.environ.get("PROXY_URL", "").strip()
     proxy_api_url = os.environ.get("PROXY_API_URL", "").strip()
@@ -42,6 +92,9 @@ def setup_proxy():
         selected_proxy = proxy_url if (proxy_url.startswith("http") or proxy_url.startswith("socks")) else f"http://{proxy_url}"
         print(f"[PROXY] Using static PROXY_URL: {selected_proxy}")
 
+    if not selected_proxy:
+        selected_proxy = discover_free_domestic_proxy()
+
     if selected_proxy:
         os.environ["HTTP_PROXY"] = selected_proxy
         os.environ["HTTPS_PROXY"] = selected_proxy
@@ -49,7 +102,7 @@ def setup_proxy():
         os.environ["https_proxy"] = selected_proxy
         print(f"[PROXY] Proxy configured successfully: {selected_proxy}")
     else:
-        print("[PROXY] No proxy configured. Direct connection will be used.")
+        print("[PROXY] 未获取到有效国内代理，降级使用直连。")
 
 def send_email(subject, content, recipient="jule85610@gmail.com"):
     smtp_password = os.getenv("SMTP_PASSWORD")
