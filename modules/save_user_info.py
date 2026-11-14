@@ -1,6 +1,10 @@
-import json, time, requests, os
+import json, time, requests, os, urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from modules.map_headers import header_user_agent
 from modules.crypto_aes import aes_encrypt, create_sign
+
+# 全局收集 304 安全验证详情
+latest_auth_info = {}
 
 # 保存用户的签到信息
 def save_user_info(
@@ -15,7 +19,8 @@ def save_user_info(
     latitude=None,
     longitude=None
 ):
-    url = "https://" + "api.moguding.net:9000/attendence/clock/v6/save"
+    global latest_auth_info
+    url = "https://api.moguding.net:9000/attendence/clock/v6/save"
     text = device + signType + planId + userId + address
     headers = {
         "roleKey": "student",
@@ -34,10 +39,10 @@ def save_user_info(
         "country": "中国",
         "address": address,
         "province": province,
-        "city": user["city"],
-        "area": user["area"],
+        "city": user.get("city", ""),
+        "area": user.get("area", ""),
         "latitude": latitude,
-        "description": user["desc"],
+        "description": user.get("desc", ""),
         "planId": planId,
         "type": signType,
         "device": device,
@@ -68,7 +73,22 @@ def save_user_info(
             h2 = headers.copy()
             h2["client_id"] = "428a8310cd442757ae699df5d89vmgh"
             alipay_url = url.replace("/attendence/clock/v6/save", "/usercenter/alipay/v1/createAxdjk")
-            r2 = session.post(alipay_url, headers=h2, json={}, verify=False)
-            print(f"[ALIPAY_304_CREATE] {r2.text}", flush=True)
+            try:
+                r2 = session.post(alipay_url, headers=h2, json={}, verify=False)
+                r2_json = r2.json()
+                print(f"[ALIPAY_304_CREATE] {r2.text}", flush=True)
+                if r2_json.get("code") == 200 and isinstance(r2_json.get("data"), dict):
+                    reg_data = r2_json["data"]
+                    out_no = reg_data.get("outRegisterNo")
+                    reg_url = reg_data.get("registerUrl")
+                    latest_auth_info = {
+                        "outRegisterNo": out_no,
+                        "registerUrl": reg_url
+                    }
+                    print(f"\n[ALIPAY_AUTH_NOTICE] >>> 请在手机支付宝打开以下链接完成实名安全验证 <<<", flush=True)
+                    print(f"[ALIPAY_AUTH_NOTICE] 验证单号: {out_no}", flush=True)
+                    print(f"[ALIPAY_AUTH_NOTICE] 验证链接: {reg_url}\n", flush=True)
+            except Exception as e:
+                print(f"[ALIPAY_304_CREATE_ERROR] {e}", flush=True)
 
     return res, res_text, res
