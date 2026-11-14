@@ -44,3 +44,4 @@ jobs:
           DESCRIPTION: ${{ secrets.DESCRIPTION }}
           OUT_REGISTER_NO: ${{ secrets.OUT_REGISTER_NO }}
           SIGN_TYPE: ${{ inputs.sign_type || 'END' }}
+        run: python gongxueyun_auto.py
