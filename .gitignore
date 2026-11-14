@@ -8,3 +8,6 @@ cv2/
 *.json
 *.zip
 *.bat
+*.vbs
+*.ps1
+*.log
