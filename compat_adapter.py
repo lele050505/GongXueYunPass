@@ -42,9 +42,24 @@ def ensure_user_env():
         except Exception:
             pass
 
+    # 本地 user.json 兼容读取
+    if os.path.exists("user.json"):
+        try:
+            with open("user.json", "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list) and len(data) > 0:
+                    os.environ["USER"] = json.dumps(data, ensure_ascii=False)
+                    return data
+                elif isinstance(data, dict):
+                    data = [data]
+                    os.environ["USER"] = json.dumps(data, ensure_ascii=False)
+                    return data
+        except Exception as e:
+            print(f"提示: 读取本地 user.json 失败: {e}")
+
     phone = os.environ.get("PHONE")
     if not phone or not phone.strip():
-        print("提示: 未检测到 USER 或 PHONE 环境变量配置。已跳过打卡流程以避免报错。")
+        print("提示: 未检测到 USER、user.json 或 PHONE 配置。已跳过打卡流程以避免报错。")
         return []
 
     lon = os.environ.get("LONGITUDE", "")
