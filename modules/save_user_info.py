@@ -35,6 +35,7 @@ def save_user_info(
         "content-type": "application/json; charset=utf-8"
     }
     session = requests.Session()
+    out_reg = os.getenv("OUT_REGISTER_NO", "").strip()
     data = {
         "country": "中国",
         "address": address,
@@ -52,7 +53,7 @@ def save_user_info(
         "keys": {},
         "t": aes_encrypt(str(int(time.time() * 1000))),
         "sign": create_sign(text),
-        "outRegisterNo": None
+        "outRegisterNo": out_reg if out_reg else None
     }
 
     res = session.post(url, headers=headers, json=data, verify=False)
@@ -76,19 +77,10 @@ def save_user_info(
             try:
                 r2 = session.post(alipay_url, headers=h2, json={}, verify=False)
                 r2_json = r2.json()
-                print(f"[ALIPAY_304_CREATE] {r2.text}", flush=True)
+                print(f"[ALIPAY_CREATE] {r2.text}", flush=True)
                 if r2_json.get("code") == 200 and isinstance(r2_json.get("data"), dict):
-                    reg_data = r2_json["data"]
-                    out_no = reg_data.get("outRegisterNo")
-                    reg_url = reg_data.get("registerUrl")
-                    latest_auth_info = {
-                        "outRegisterNo": out_no,
-                        "registerUrl": reg_url
-                    }
-                    print(f"\n[ALIPAY_AUTH_NOTICE] >>> 请在手机支付宝打开以下链接完成实名安全验证 <<<", flush=True)
-                    print(f"[ALIPAY_AUTH_NOTICE] 验证单号: {out_no}", flush=True)
-                    print(f"[ALIPAY_AUTH_NOTICE] 验证链接: {reg_url}\n", flush=True)
+                    latest_auth_info = r2_json.get("data", {})
             except Exception as e:
-                print(f"[ALIPAY_304_CREATE_ERROR] {e}", flush=True)
+                print(f"[ALIPAY_ERROR] {e}", flush=True)
 
-    return res, res_text, res
+    return res
