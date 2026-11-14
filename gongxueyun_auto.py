@@ -107,10 +107,28 @@ def main():
 
     report_res = submit_reports(users)
 
-    notify_content = f"工学云自动化运行结果 ({args.mode}):\n打卡结果: {json.dumps(clock_res, ensure_ascii=False)}\n报告结果: {json.dumps(report_res, ensure_ascii=False)}"
+    auth_notice = ""
+    try:
+        from modules.save_user_info import latest_auth_info
+        if latest_auth_info and latest_auth_info.get("registerUrl"):
+            reg_url = latest_auth_info.get("registerUrl")
+            out_no = latest_auth_info.get("outRegisterNo")
+            auth_notice = (
+                f"\n\n【重要：工学云 304 安全风控提示】\n"
+                f"平台检测到异地/海外 IP 访问，需在手机支付宝完成一次实名验证：\n"
+                f"1. 验证单号: {out_no}\n"
+                f"2. 支付宝直跳验证链接: {reg_url}\n"
+                f"（提示：若后续在 GitHub Secrets 配置国内 PROXY_URL，可避开海外 IP 风控直接打卡成功）"
+            )
+            print(f"[CLOCK_API_RAW] {auth_notice}")
+    except Exception as e:
+        print(f"[CLOCK_API_RAW] Error compiling auth notice: {e}")
+
+    notify_content = f"工学云自动化运行结果 ({args.mode}):\n打卡结果: {json.dumps(clock_res, ensure_ascii=False)}\n报告结果: {json.dumps(report_res, ensure_ascii=False)}{auth_notice}"
     compat_adapter.notify_all("工学云打卡与周月报通知", notify_content)
 
-    send_email("工学云自动打卡与报告结果通知", notify_content, recipient="jule85610@gmail.com")
+    email_subject = "工学云需要安全验证提醒" if auth_notice else "工学云自动打卡与报告结果通知"
+    send_email(email_subject, notify_content, recipient="jule85610@gmail.com")
 
 if __name__ == "__main__":
     main()
