@@ -2,7 +2,7 @@ import json, requests
 from modules.map_headers import header_user_agent
 
 
-# 获取planId，忘了干啥的
+# 获取planId
 def get_plan_id(user, token: str, sign: str):
     url = "https://api.moguding.net:9000/practice/plan/v3/getPlanByStu"
     data = {"state": ""}
@@ -14,4 +14,8 @@ def get_plan_id(user, token: str, sign: str):
         "user-agent": header_user_agent(user),
     }
     res = requests.post(url=url, data=json.dumps(data), headers=headers2)
-    return res.json()["data"][0]["planId"]
+    res_json = res.json()
+    plans = res_json.get("data")
+    if not plans:
+        raise ValueError(f"获取实习计划失败: {res_json.get('msg', res.text)}")
+    return plans[0]["planId"]
