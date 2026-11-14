@@ -33,9 +33,6 @@ def send_sign_in(user_info, timeout):
 
         user_info_prefix = f"[{remark}/{phone}]"
 
-        # ❗开发环境输出, 包含敏感内容, 打印登录响应内容
-        # dprint(f"{user_info_prefix} 登录响应: {userInfo}\n")
-
         # 随机化经纬度
         if user_info.get("randomLocation", False):
             user_info["latitude"] = user_info["latitude"][0:-1] + str(
@@ -56,7 +53,7 @@ def send_sign_in(user_info, timeout):
         planId = get_plan_id(user_info, token, sign_info)
         # 使用上海时间判断是上班还是下班
         signType = "START" if is_start else "END"
-        # 检查是否已经打过卡，避免重复打卡, 不需要检查的话可以注释掉整个if块
+        # 检查是否已经打过卡，避免重复打卡
         if check_sign(token, signType) and not RepeatCheckIn:
             dprint(f"{user_info_prefix}")
             print(f"已打过{sign_type_mapping[signType]}卡, 任务跳过。\n")
@@ -76,22 +73,35 @@ def send_sign_in(user_info, timeout):
                 latitude=user_info["latitude"],
                 longitude=user_info["longitude"],
             )
+            dprint(f"{user_info_prefix}打卡响应状态: {signResp.status_code}, 响应内容: {msg}\n")
         except Exception as e:
             error_message = f"{user_info_prefix}打卡失败, 错误原因: {str(e)}"
             dprint(error_message)
             global_sign_results.append(error_message)
             return
-        # 打印完整的打卡响应内容
-            dprint(f"{user_info_prefix}打卡响应状态: {signResp.status_code}, 响应内容: {msg}\n")
+
         # 构建推送消息
         pushSignType = "上班" if signType == "START" else "下班"
-        pushSignIsOK = "成功！" if signResp else "失败！"
+        status_detail = ""
+        try:
+            resp_dict = full_response.json()
+            code = resp_dict.get("code")
+            msg_str = str(resp_dict.get("msg", ""))
+            if code == 200 and msg_str != "304":
+                status_detail = "成功！"
+            elif msg_str == "304" or "304" in msg_str:
+                status_detail = "需支付宝实名安全验证(已生成验证链接)"
+            else:
+                status_detail = f"失败({msg_str})"
+        except Exception:
+            status_detail = "成功！" if signResp.status_code == 200 else f"失败({signResp.status_code})"
+
         signStatus = "打卡"
         hourNow = gmt_time.hour
         if hourNow == 11 or hourNow == 23:
             signStatus = "补签"
         global_sign_results.append(
-            f"{user_info_prefix}工学云{pushSignType}{signStatus}{pushSignIsOK}\n"
+            f"{user_info_prefix}工学云{pushSignType}{signStatus}{status_detail}\n"
         )
     finally:
         timer.cancel()
