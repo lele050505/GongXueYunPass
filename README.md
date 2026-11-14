@@ -1,179 +1,116 @@
-### *GitHub工作流或云函数简易部署+微信消息推送，支持多用户同时打卡、消息合并推送，轻量零成本。*
+# GongXueYunPass - 工学云/蘑菇丁全自动打卡与报告系统
 
-基于下方项目做的合并简化，**只保留了打卡功能**
+[![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Automated-brightgreen?logo=github-actions)](https://github.com/lele050505/GongXueYunPass/actions)
+[![Python](https://img.shields.io/badge/Python-3.9%20%7C%203.10%20%7C%203.11-blue?logo=python)](https://www.python.org/)
+[![API Version](https://img.shields.io/badge/API-v6.0-orange)](https://api.moguding.net:9000)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-1. https://github.com/Rockytkg/AutoMoGuDingCheckIn
-2. https://github.com/XuanRanDev/Auto-GongXueYun-2
+> 工学云（蘑菇丁）全自动定时打卡、周报月报自动化系统。基于官方最新 **v6.0 API** 深度重构，零成本免服务器部署，支持微信消息合并推送、安全单号管理、代理轮换与多用户多线程并发。
 
-> # 免费 / 快捷部署
+---
 
-> ## GitHub工作流（新版推荐）
+## ✨ 核心特性
 
-可以不看文字直接看图片，几步就走完了，另外说一下如果频繁利用工作流的话可能会被GitHub判定为滥用，但本项目的频率无碍，且方便好用。
+- 🚀 **官方 v6.0 API 适配**：完整支持工学云最新 v6.0 协议规范，重构滑动验证码识别与 AES-PKCS5 加密签名机制。
+- ☁️ **零成本云端自动化**：基于 GitHub Actions 定时执行，无需购买或维护任何服务器，每天准时自动打卡。
+- 🛡️ **安全验证单号管理**：支持安全验证单号（`OUT_REGISTER_NO`）自动携带与凭证流转，轻松绕过平台异常安全核验。
+- 🌐 **动态/静态代理支持**：支持 `PROXY_URL` 与 `PROXY_API_URL` 环境变量，可选接入优质代理池规避海外 IP 访问限制。
+- 👥 **多用户多线程并发**：支持配置单个或任意多个账号，采用多线程并发打卡，高效稳定。
+- 📬 **智能消息推送**：深度集成 PushPlus（微信通知）与邮件通知，支持多用户结果合并推送，避免刷屏骚扰。
+- 🎯 **灵活打卡控制**：支持环境变量及手动工作流参数精确选择打卡类型（`START` 上班打卡 / `END` 下班打卡）。
+- 📍 **高精度定位与微调**：支持经纬度精确设置，并内置坐标随机微小浮动（`randomLocation`）算法，打卡更真实自然。
+- 🛑 **防重复打卡保护**：打卡前智能查询当日状态，避免多次打卡造成记录混乱。
+- 💻 **双模式运行兼容**：既支持 GitHub Actions 环境变量自动化，又支持本地直接读取 `user.json` 配置进行调试运行。
 
-1. Fork仓库，修改一下上方的json配置文件，复制内容
-2. 依次进入克隆后的仓库页面上方的:`Settings`  → `Actions secrets and variables` → `Actions`
-3. 点击`New repository secret`，Name输入框填写`USER`，Secret输入框里粘贴刚刚复制的`json配置`，如果要多用户，则复制一次数据体自己改改，然后点击下方绿色`Add secret`按钮保存
-4. 回到仓库左上角的`Actions`，点击左侧的`打卡`，点击右侧的`Run workflow`，**再次点击**绿色的Run workflow按钮即可开始定时任务
+---
 
-![](https://testingcf.jsdelivr.net/gh/4444TENSEI/CDN@master/img/server/readme/AutoGongXueYun/01.webp)
+## 🚀 快速上手 (GitHub Actions 推荐)
 
-![](https://testingcf.jsdelivr.net/gh/4444TENSEI/CDN@master/img/server/readme/AutoGongXueYun/02.webp)
+### 第一步：Fork 本仓库
+点击本仓库右上角的 **Fork** 按钮，将项目复制到您自己的 GitHub 账号下。
 
-![](https://testingcf.jsdelivr.net/gh/4444TENSEI/CDN@master/img/server/readme/AutoGongXueYun/03.webp)
+### 第二步：配置 Secrets 环境变量
+进入您 Fork 后的仓库页面：
+1. 依次点击顶部导航栏的 **Settings** -> **Secrets and variables** -> **Actions**。
+2. 点击绿色的 **New repository secret** 按钮添加以下变量：
 
-![](https://testingcf.jsdelivr.net/gh/4444TENSEI/CDN@master/img/server/readme/AutoGongXueYun/04.webp)
+| Secret 键名 | 是否必填 | 说明 | 示例值 |
+| :--- | :--- | :--- | :--- |
+| `USER` | 必选 (或填分散变量) | 完整打卡配置 JSON 数组（推荐） | 见下方配置示例 |
+| `PHONE` | 可选 | 手机号（与 PASSWORD 配合代替 USER） | `13800138000` |
+| `PASSWORD` | 可选 | 登录密码 | `your_password` |
+| `OUT_REGISTER_NO` | 可选 | 安全核验单号（若账号触发安全风控时配置） | `179463...-sign` |
+| `PROXY_URL` | 可选 | 静态代理地址 | `http://user:pwd@ip:port` |
+| `PROXY_API_URL` | 可选 | 动态代理提取 API | `https://api.proxy.com/get` |
 
-- 新用户的话，进入Actions后，点击页面黄色块里的按钮开启功能再继续，没什么好讲的，页面看不懂可以自行用翻译APP拍屏。
-
-![](https://testingcf.jsdelivr.net/gh/4444TENSEI/CDN@master/img/server/readme/AutoGongXueYun/05.webp)
-
-- 到这里就结束了，手机上应该能收到通知，配置了微信推送且没收到通知的话，看一下工作流日志，下面是运行成功的日志
-- 注：如果在日志中显示解密失败，一定是你的环境变量没有添加正确，确定键名是`USER`四个大写字母。
-
-![](https://testingcf.jsdelivr.net/gh/4444TENSEI/CDN@master/img/server/readme/AutoGongXueYun/06.webp)
-
-- 默认在工作流文件设置了两个打卡时间，注意：这里不是北京时间，有8个小时的偏移自行参考计算并且保持字数规范。如果要修改，自行百度cron表达式，然后去修改工作流文件👇
-
-![](https://testingcf.jsdelivr.net/gh/4444TENSEI/CDN@master/img/server/readme/AutoGongXueYun/07.webp)
-
-> ## 华为云函数（暂时废弃）
-
-由于新版本需要使用`opencv-python`包来越过`滑块验证码`，而这个包在华为云函数**没有公用依赖包**，如果自己上传私有依赖包又太大了受到限制（100MB左右），所以先废弃着吧。
-
-但你也可以自行部署到**个人服务器**，通过宝塔面板或是其他**面板的定时任务**执行命令
-
-```
-py index.py
-```
-
-如果你有好的建议，可以提出issue，或是通过我主页个人简介的邮箱联系我。
-
-1. [下载最新版](https://github.com/4444TENSEI/Auto-GongXueYun/releases/latest)压缩包(.zip)
-2. 跟着**图文教程**走：[华为云函数部署Python定时任务](https://blog.yokaze.top/archives/930)
-3. 创建云函数导入ZIP源码后，滚动到页面底部，点击左下角**添加依赖包**、搜索: `cryptography_41.0.7_python39`
-4. **环境变量键名**为`USER`，参考文档下方配置文件示例，自行修改后复制，在云函数设置中创建**环境变量**
-
-> ## 开发环境 / 测试 / 部署到服务器使用
-
-- 安装依赖
-
-```
-pip install -r requirements.txt
-```
-
-- 运行
-
-```
-py index.py
-```
-
-
-
-> ## ※基于提到的项目所做的修改: 
-
-1. 多用户时，打卡推送的消息内容**合并到同一条pushplus消息**，避免了每个用户都会单独推送。
-
-2. 增加了详细的调试语句输出
-
-3. 更新登录/获取token的接口为最新的v6（这里的滑块验证码和AES解密方法大力感谢参考的项目作者[Rockytkg](https://github.com/Rockytkg)，大家可以去帮忙点点star）
-
-4. 简化减少了没必要的配置项，更新了获取token的接口and加解密用的库
-
-5. 新增了配置项: `remark`，作为用户名备注
-
-6. 加入并发、解耦、模块化
-
-   
-
-   ## 配置文件示例（环境变量键名设置为`USER`）: 
-
-   
-
-   ```
-   [
-     {
-       "remark": "自定义用户名，用于通知中标识用户",
-       "phone": "手机号",
-       "password": "密码",
-       "province": "xx省",
-       "city": "xx市",
-       "area": "xx区",
-       "address": "最终打卡页面显示的文字，xx省 · xx市 · 某路边",
-       "longitude": "经度(精确到小数点后六位)",
-       "latitude": "纬度(精确到小数点后六位)",
-       "randomLocation": true,
-       "enable": true,
-       "desc": "打卡备注",
-       "pushKey": "pushplus官网获取的key，需要实名"
-     }
-   ]
-   ```
-
-### 各项配置含义: 
-
-| 参数名称        | 含义                                                         |
-| --------------- | :----------------------------------------------------------- |
-| remark          | 自定义打卡用户名，会出现在推送消息内容                       |
-| phone           | 手机号                                                       |
-| password        | 密码                                                         |
-| province        | 省份                                                         |
-| city            | 城市                                                         |
-| area            | 区/县                                                        |
-| address         | 详细地址，如果你打卡的时候中间带的有·这个符号你也就手动加上，这里填什么，打卡后工学云就会显示你填的内容（工学云默认·这个符号左右都会有一个空格） |
-| longitude       | 打卡位置经度,通过坐标拾取来完成(仅需精确到小数点后6位)，[自行查询传送门](https://jingweidu.bmcx.com/) |
-| latitude        | 打卡位置纬度,通过坐标拾取来完成(仅需精确到小数点后6位)，[自行查询传送门](https://jingweidu.bmcx.com/) |
-| randomLocation  | 是否启用打卡位置浮动，启用后每次打卡会在原有位置基础上进行位置浮动 |
-| enable          | 打卡功能总开关                                               |
-| desc            | 打卡备注                                                     |
-| passwordpushKey | 密码打卡结果微信推送，微信推送使用的是pushPlus，请到官网绑定微信([传送门](https://www.pushplus.plus/))，然后在发送消息里面把你的token复制出来粘贴到pushKey这项 |
-
-## 多用户配置文件示例
-
-```
+#### `USER` 配置 JSON 格式示例：
+```json
 [
   {
-    "remark": "用户1111111111111",
-    "phone": "手机号",
-    "password": "密码",
-    "province": "xx省",
-    "city": "xx市",
-    "area": "xx区",
-    "address": "最终打卡页面显示的文字，xx省 · xx市 · 某路边",
-    "longitude": "经度(精确到小数点后六位)",
-    "latitude": "纬度(精确到小数点后六位)",
+    "remark": "我的打卡",
+    "phone": "13800138000",
+    "password": "your_password",
+    "province": "广东省",
+    "city": "广州市",
+    "area": "天河区",
+    "address": "广东省 广州市 天河区 某某路 100 号",
+    "longitude": "113.324520",
+    "latitude": "23.102290",
     "randomLocation": true,
     "enable": true,
-    "desc": "打卡备注，顺便说一下：根据用户数量的增加，只要保持标准json格式也就是现在这个样子，一个用户复制一次花括号加进来就行，这里展示三个用户的情况。不限量但是太多了容易造成崩溃",
-    "pushKey": "Key设置为相同的会推送到一个微信去，如果不相同则各自推送"
-  },
-  {
-    "remark": "用户222222222222",
-    "phone": "手机号",
-    "password": "密码",
-    "province": "xx省",
-    "city": "xx市",
-    "area": "xx区",
-    "address": "最终打卡页面显示的文字，xx省 · xx市 · 某路边",
-    "longitude": "经度(精确到小数点后六位)",
-    "latitude": "纬度(精确到小数点后六位)",
-    "randomLocation": true,
-    "desc": "打卡备注，顺便说一下：根据用户数量的增加，只要保持标准json格式也就是现在这个样子，一个用户复制一次花括号加进来就行，这里展示三个用户的情况。不限量但是太多了容易造成崩溃",
-    "pushKey": "Key设置为相同的会推送到一个微信去，如果不相同则各自推送"
-  },
-  {
-    "remark": "用户333333333333",
-    "phone": "手机号",
-    "password": "密码",
-    "province": "xx省",
-    "city": "xx市",
-    "area": "xx区",
-    "address": "最终打卡页面显示的文字，xx省 · xx市 · 某路边",
-    "longitude": "经度(精确到小数点后六位)",
-    "latitude": "纬度(精确到小数点后六位)",
-    "randomLocation": true,
-    "desc": "打卡备注，顺便说一下：根据用户数量的增加，只要保持标准json格式也就是现在这个样子，一个用户复制一次花括号加进来就行，这里展示三个用户的情况。不限量但是太多了容易造成崩溃",
-    "pushKey": "Key设置为相同的会推送到一个微信去，如果不相同则各自推送"
+    "desc": "日常实习打卡",
+    "pushKey": "your_pushplus_token"
   }
 ]
 ```
+
+### 第三步：开启 Actions 定时任务
+1. 点击仓库顶部的 **Actions** 标签栏。
+2. 如页面出现绿色确认按钮（`I understand my workflows, go ahead and enable them`），请点击以启用工作流。
+3. 在左侧选择 **GongXueYun Auto CheckIn & Report**，点击右侧的 **Run workflow** -> 选择打卡类型（START / END） -> 点击绿色 **Run workflow** 即可立即执行一次测试！
+
+---
+
+## 💻 本地运行指南
+
+如果您希望在个人电脑或自己的 VPS 服务器上运行：
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/lele050505/GongXueYunPass.git
+cd GongXueYunPass
+
+# 2. 安装 Python 依赖
+pip install -r requirements.txt
+
+# 3. 复制并编辑配置文件
+cp user.json.example user.json
+# 编辑 user.json 填入您的打卡参数
+
+# 4. 运行打卡脚本
+python gongxueyun_auto.py
+```
+
+---
+
+## ⏰ 定时调度与打卡时间说明
+
+GitHub Actions 工作流预设了每日两次自动执行（工作流使用 UTC 时间，北京时间需加 8 小时）：
+- **上午上班打卡**：北京时间 08:30 左右执行
+- **下午下班打卡**：北京时间 17:30 左右执行
+
+> 💡 如需调整时间，可直接编辑 `.github/workflows/clock.yml` 中的 `schedule -> cron` 表达式。
+
+---
+
+## ⚠️ 免责声明
+
+1. 本项目仅供学习交流 Python 网络编程、自动化测试与 GitHub Actions 使用，严禁用于任何商业牟利或非法用途。
+2. 使用本项目所造成的一切后果及损失均由使用者自行承担，开发者概不负责。
+3. 请自觉遵守国家法律法规及工学云平台使用规范。
+
+---
+
+## 📄 开源许可证
+
+本项目基于 [MIT License](LICENSE) 开源协议分发。
