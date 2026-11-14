@@ -1,4 +1,4 @@
-import random, threading
+import random, threading, os
 from modules.get_plan_id import get_plan_id
 from modules.get_login_token import get_token
 from modules.crypto_aes import create_sign
@@ -51,8 +51,12 @@ def send_sign_in(user_info, timeout):
         token = userInfo["token"]
         sign_info = create_sign(userId + "student")
         planId = get_plan_id(user_info, token, sign_info)
-        # 使用上海时间判断是上班还是下班
-        signType = "START" if is_start else "END"
+        # 检查是否由环境变量显式指定 (START=上班, END=下班)
+        sign_type_env = os.environ.get("SIGN_TYPE", "").strip().upper()
+        if sign_type_env in ["START", "END"]:
+            signType = sign_type_env
+        else:
+            signType = "START" if is_start else "END"
         # 检查是否已经打过卡，避免重复打卡
         if check_sign(token, signType) and not RepeatCheckIn:
             dprint(f"{user_info_prefix}")
