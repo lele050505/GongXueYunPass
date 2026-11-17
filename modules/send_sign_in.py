@@ -1,4 +1,4 @@
-import random, threading, os
+import os, random, threading
 from modules.get_plan_id import get_plan_id
 from modules.get_login_token import get_token
 from modules.crypto_aes import create_sign
@@ -12,8 +12,8 @@ from modules.load_config import dprint
 shanghai_tz = timezone(timedelta(hours=8))
 gmt_time = datetime.now(shanghai_tz)
 now = datetime.now(shanghai_tz)
-# 以17时为分界线, 判断打卡是上班还是下班
-is_start = now.hour < 17
+# 以16时为分界线, 判断打卡是上班还是下班 (适配下午17:30开机的下班打卡)
+is_start = now.hour < 16
 # 中文映射字典, 用于控制台输出罢了
 sign_type_mapping = {"START": "上班", "END": "下班"}
 # 收集所有线程签到结果
@@ -32,6 +32,9 @@ def send_sign_in(user_info, timeout):
         remark = user_info.get("remark", "")
 
         user_info_prefix = f"[{remark}/{phone}]"
+
+        # ❗开发环境输出, 包含敏感内容, 打印登录响应内容
+        # dprint(f"{user_info_prefix} 登录响应: {userInfo}\n")
 
         # 随机化经纬度
         if user_info.get("randomLocation", False):
@@ -57,8 +60,8 @@ def send_sign_in(user_info, timeout):
             signType = sign_type_env
         else:
             signType = "START" if is_start else "END"
-        # 检查是否已经打过卡，避免重复打卡
-        if check_sign(token, signType) and not RepeatCheckIn:
+        # 检查是否已经打过卡，避免重复打卡, 不需要检查的话可以注释掉整个if块
+        if check_sign(token, signType, userId=userId, sign_info=sign_info) and not RepeatCheckIn:
             dprint(f"{user_info_prefix}")
             print(f"已打过{sign_type_mapping[signType]}卡, 任务跳过。\n")
             return
@@ -77,13 +80,13 @@ def send_sign_in(user_info, timeout):
                 latitude=user_info["latitude"],
                 longitude=user_info["longitude"],
             )
+            # 打印完整的打卡响应内容
             dprint(f"{user_info_prefix}打卡响应状态: {signResp.status_code}, 响应内容: {msg}\n")
         except Exception as e:
             error_message = f"{user_info_prefix}打卡失败, 错误原因: {str(e)}"
             dprint(error_message)
             global_sign_results.append(error_message)
             return
-
         # 构建推送消息
         pushSignType = "上班" if signType == "START" else "下班"
         status_detail = ""

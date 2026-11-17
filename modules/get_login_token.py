@@ -1,12 +1,14 @@
-import json, time, requests, uuid, random, base64, struct, requests, cv2
-from modules.crypto_aes import aes_encrypt, aes_decrypt
+import json, time, requests, uuid, random, base64, struct, cv2, os, hashlib
+from modules.crypto_aes import aes_encrypt, aes_decrypt, create_sign
 from modules.load_config import dprint
 import numpy as np
 from typing import Optional
 
+APP_VERSION = "5.44.6"
+DART_USER_AGENT = "Dart/3.7 (dart:io)"
 
 request_headers = {
-    "user-agent": "Dart/2.17 (dart:io)",
+    "user-agent": DART_USER_AGENT,
     "content-type": "application/json; charset=utf-8",
     "accept-encoding": "gzip",
     "host": "api.moguding.net:9000",
@@ -16,23 +18,89 @@ login_url = "https://api.moguding.net:9000/session/user/v6/login"
 captcha_url = "https://api.moguding.net:9000/session/captcha/v1/get"
 check_slider_url = "https://api.moguding.net:9000/session/captcha/v1/check"
 
+def get_device_id(user):
+    dev = user.get("deviceId") or os.getenv("DEVICE_ID")
+    if dev and str(dev).strip():
+        return str(dev).strip()
+    phone = str(user.get("phone", "default_phone")).strip()
+    return hashlib.md5(f"gxy_{phone}_salt_2026".encode()).hexdigest()
+
+def get_cache_file():
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_dir, "session_cache.json")
+
+def load_cached_session(phone):
+    cache_file = get_cache_file()
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                cached = data.get(str(phone))
+                if cached and cached.get("token") and cached.get("userId"):
+                    return cached
+        except Exception:
+            pass
+    return None
+
+def save_cached_session(phone, user_info):
+    cache_file = get_cache_file()
+    try:
+        data = {}
+        if os.path.exists(cache_file):
+            with open(cache_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        data[str(phone)] = user_info
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        dprint(f"保存会话缓存失败: {e}")
+
+def check_token_alive(token, userId):
+    url = "https://api.moguding.net:9000/practice/plan/v3/getPlanByStu"
+    headers = {
+        "roleKey": "student",
+        "authorization": token,
+        "sign": create_sign(str(userId) + "student"),
+        "content-type": "application/json; charset=UTF-8",
+        "user-agent": DART_USER_AGENT,
+    }
+    try:
+        r = requests.post(url, json={"state": ""}, headers=headers, timeout=6, verify=False)
+        return r.status_code == 200 and r.json().get("code") == 200
+    except Exception:
+        return False
 
 def _post_request(url, headers, data, error_message):
-    response = requests.post(url, headers=headers, json=data)
+    response = requests.post(url, headers=headers, json=data, verify=False)
     if response.status_code != 200:
         raise ValueError(f"{error_message}: {response.text}")
     return response.json()
 
 
-def get_token(user):
+def get_token(user, force_refresh=False):
+    phone = str(user["phone"]).strip()
+    
+    # 优先复用持久化 Token，避免频繁滑块登录触发异地/机器风控
+    if not force_refresh:
+        cached = load_cached_session(phone)
+        if cached:
+            token = cached.get("token")
+            userId = cached.get("userId")
+            if token and userId and check_token_alive(token, userId):
+                print(f"[SESSION] 复用本地长效登录凭证 (固定设备ID: {get_device_id(user)[:8]}***，免滑块登录)")
+                return cached
+            else:
+                dprint("[SESSION] 缓存凭证已失效，重新执行标准登录")
+
+    fixed_device_id = get_device_id(user)
     data = {
         "phone": aes_encrypt(user["phone"]),
         "password": aes_encrypt(user["password"]),
-        "captcha": pass_captcha(),
+        "captcha": pass_captcha(client_uid=fixed_device_id),
         "loginType": "android",
-        "uuid": str(uuid.uuid4()).replace("-", ""),
+        "uuid": fixed_device_id,
         "device": "android",
-        "version": "5.43.6",
+        "version": APP_VERSION,
         "t": aes_encrypt(str(int(time.time() * 1000))),
     }
     rsp = _post_request(
@@ -42,22 +110,24 @@ def get_token(user):
         "登陆失败, 看到这条提示代表官方接口又更新了, 请在github留issue。",
     )
     user_info = json.loads(aes_decrypt(rsp.get("data", "")))
-
-    # ❗开发环境输出, 打印登录响应内容, 从此查看是否获取到token
-    # dprint(user_info)
-
+    user_info["cached_at"] = int(time.time())
+    user_info["deviceId"] = fixed_device_id
+    save_cached_session(phone, user_info)
+    print(f"[SESSION] 登录成功并缓存会话凭证 (设备ID已永久固化: {fixed_device_id[:8]}***)")
     return user_info
 
 
-def pass_captcha(max_attempts: Optional[int] = 5) -> str:
+def pass_captcha(max_attempts: Optional[int] = 5, client_uid: Optional[str] = None) -> str:
     """
     通过行为验证码（验证码类型为blockPuzzle）
     """
+    if not client_uid:
+        client_uid = str(uuid.uuid4()).replace("-", "")
     attempts = 0
     while attempts < max_attempts:
         time.sleep(random.uniform(0.5, 0.7))
         request_data = {
-            "clientUid": str(uuid.uuid4()).replace("-", ""),
+            "clientUid": client_uid,
             "captchaType": "blockPuzzle",
         }
         captcha_info = _post_request(

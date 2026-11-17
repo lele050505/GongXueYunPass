@@ -1,116 +1,133 @@
-# GongXueYunPass - 工学云/蘑菇丁全自动打卡与报告系统
+# 🎓 GongXueYunPass - 工学云全自动打卡与周月报提交系统
 
-[![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Automated-brightgreen?logo=github-actions)](https://github.com/lele050505/GongXueYunPass/actions)
-[![Python](https://img.shields.io/badge/Python-3.9%20%7C%203.10%20%7C%203.11-blue?logo=python)](https://www.python.org/)
-[![API Version](https://img.shields.io/badge/API-v6.0-orange)](https://api.moguding.net:9000)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Automated-green.svg)](https://github.com/lele050505/GongXueYunPass/actions)
+[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
+[![Release](https://img.shields.io/badge/release-v1.0.0-brightgreen.svg)](https://github.com/lele050505/GongXueYunPass/releases)
 
-> 工学云（蘑菇丁）全自动定时打卡、周报月报自动化系统。基于官方最新 **v6.0 API** 深度重构，零成本免服务器部署，支持微信消息合并推送、安全单号管理、代理轮换与多用户多线程并发。
-
----
-
-## ✨ 核心特性
-
-- 🚀 **官方 v6.0 API 适配**：完整支持工学云最新 v6.0 协议规范，重构滑动验证码识别与 AES-PKCS5 加密签名机制。
-- ☁️ **零成本云端自动化**：基于 GitHub Actions 定时执行，无需购买或维护任何服务器，每天准时自动打卡。
-- 🛡️ **安全验证单号管理**：支持安全验证单号（`OUT_REGISTER_NO`）自动携带与凭证流转，轻松绕过平台异常安全核验。
-- 🌐 **动态/静态代理支持**：支持 `PROXY_URL` 与 `PROXY_API_URL` 环境变量，可选接入优质代理池规避海外 IP 访问限制。
-- 👥 **多用户多线程并发**：支持配置单个或任意多个账号，采用多线程并发打卡，高效稳定。
-- 📬 **智能消息推送**：深度集成 PushPlus（微信通知）与邮件通知，支持多用户结果合并推送，避免刷屏骚扰。
-- 🎯 **灵活打卡控制**：支持环境变量及手动工作流参数精确选择打卡类型（`START` 上班打卡 / `END` 下班打卡）。
-- 📍 **高精度定位与微调**：支持经纬度精确设置，并内置坐标随机微小浮动（`randomLocation`）算法，打卡更真实自然。
-- 🛑 **防重复打卡保护**：打卡前智能查询当日状态，避免多次打卡造成记录混乱。
-- 💻 **双模式运行兼容**：既支持 GitHub Actions 环境变量自动化，又支持本地直接读取 `user.json` 配置进行调试运行。
+> 🚀 **全面适配工学云（蘑菇钉）最新 v6.0 API**，支持上下班打卡智能识别、自动补交周报与月报、304 安全风控智能感知、多渠道消息通知，支持 **GitHub Actions 云端全自动** 与 **Windows 本地静默定时任务**。
 
 ---
 
-## 🚀 快速上手 (GitHub Actions 推荐)
+## 🌟 核心功能特性
 
-### 第一步：Fork 本仓库
-点击本仓库右上角的 **Fork** 按钮，将项目复制到您自己的 GitHub 账号下。
+- **⚡ 完整支持最新官方接口**：适配工学云/蘑菇钉 `v6.0` 协议，采用 OpenCV 智能算法识别滑动拼图验证码与 AES 加密鉴权。
+- **⏰ 智能上下班识别与手动调度**：
+  - 自动识别上下班时间段（默认以 17:00 为界），也可在 GitHub Actions 界面下拉选择 `START`（上班）或 `END`（下班）按需手动触发。
+- **📝 周报 & 月报全自动提交**：打卡同时自动检测并提交未交的实习周报与月报，省心无忧。
+- **🛡️ 304 安全风控与支付宝核验直通**：
+  - 针对异地/海外 IP 触发的 304 安全风控，系统能自动生成并捕获支付宝实名核验链接与单号，方便手机一键扫码核验。
+- **🌐 灵活的网络环境适配**：
+  - 支持直接连接（直连 9000 端口）；
+  - 支持配置国内高匿代理（`PROXY_URL` 或 `PROXY_API_URL`）避开异地拦截。
+- **💻 双模自动化部署方案**：
+  - **云端模式**：直接通过 GitHub Actions 工作流定时触发，0 设备依赖；
+  - **本地模式**：支持 Windows 系统计划任务后台静默运行，使用本地真实网络打卡，永无异地风控。
+- **📢 多通道消息推送**：支持 Gmail/QQ/163 邮箱通知、Server酱、PushPlus 等主流通知渠道。
 
-### 第二步：配置 Secrets 环境变量
-进入您 Fork 后的仓库页面：
-1. 依次点击顶部导航栏的 **Settings** -> **Secrets and variables** -> **Actions**。
-2. 点击绿色的 **New repository secret** 按钮添加以下变量：
+---
 
-| Secret 键名 | 是否必填 | 说明 | 示例值 |
+## 🚀 快速上手部署
+
+### 方案一：GitHub Actions 云端全自动（推荐）
+
+无需自备服务器，直接利用 GitHub Actions 定时执行：
+
+#### 1. Fork 本仓库并开启 Actions
+- 点击右上角 **Fork** 将本仓库复制到你的账号下；
+- 进入 Fork 后的仓库，点击顶部导航栏的 **Actions**，点击绿色按钮开启工作流功能。
+
+#### 2. 配置 Repository Secrets
+进入仓库的 **Settings** -> **Secrets and variables** -> **Actions**，点击 **New repository secret** 添加以下配置：
+
+| Secret 键名 | 是否必填 | 说明 | 示例 |
 | :--- | :--- | :--- | :--- |
-| `USER` | 必选 (或填分散变量) | 完整打卡配置 JSON 数组（推荐） | 见下方配置示例 |
-| `PHONE` | 可选 | 手机号（与 PASSWORD 配合代替 USER） | `13800138000` |
-| `PASSWORD` | 可选 | 登录密码 | `your_password` |
-| `OUT_REGISTER_NO` | 可选 | 安全核验单号（若账号触发安全风控时配置） | `179463...-sign` |
-| `PROXY_URL` | 可选 | 静态代理地址 | `http://user:pwd@ip:port` |
-| `PROXY_API_URL` | 可选 | 动态代理提取 API | `https://api.proxy.com/get` |
+| `PHONE` | **必填** | 工学云登录手机号 | `17887874506` |
+| `PASSWORD` | **必填** | 工学云登录密码 | `Jule0523` |
+| `PROVINCE` | **必填** | 打卡所在省份 | `陕西省` |
+| `CITY` | **必填** | 打卡所在城市 | `咸阳市` |
+| `AREA` | **必填** | 打卡所在区/县 | `兴平市` |
+| `ADDRESS` | **必填** | 打卡详细地址描述 | `兴平市永东包装有限公司` |
+| `LONGITUDE` | **必填** | 经度（精确到后6位） | `108.432481` |
+| `LATITUDE` | **必填** | 纬度（精确到后6位） | `34.270681` |
+| `DESCRIPTION`| 选填 | 打卡备注/签到描述 | `日常实习上班` |
+| `OUT_REGISTER_NO` | 选填 | 支付宝人脸核验通过单号（若遇304时填入） | `179463...-sign` |
+| `PROXY_URL` | 选填 | 国内 HTTP 代理（用于绕过海外机房风控） | `http://user:pwd@ip:port` |
+| `SMTP_PASSWORD` | 选填 | 邮箱授权码（配置后打卡结果邮件直达） | `your_smtp_app_password` |
 
-#### `USER` 配置 JSON 格式示例：
+#### 3. 手动触发与定时测试
+1. 进入仓库的 **Actions** 标签页；
+2. 在左侧选择 **`GongXueYun Auto CheckIn & Report`**；
+3. 点击右侧 **`Run workflow`**，选择打卡类型（`START` 或 `END`），点击绿色按钮立即运行；
+4. 运行完成后可在查看运行日志和回执信息。
+5. 默认定时时间：工作日每天早上 08:30（上班）与下午 18:00（下班）自动执行。
+
+---
+
+### 方案二：本地 Windows 全自动静默打卡（100% 同城原生 IP）
+
+如果你希望使用本地电脑打卡，直接走本地宽带原生 IP，完全免去异地人脸拦截：
+
+#### 1. 克隆代码并安装依赖
+```bash
+git clone https://github.com/lele050505/GongXueYunPass.git
+cd GongXueYunPass
+pip install -r requirements.txt
+```
+
+#### 2. 填写本地配置 `user.json`
+复制 `user.json.example` 为 `user.json` 并填入个人信息：
 ```json
 [
   {
     "remark": "我的打卡",
-    "phone": "13800138000",
-    "password": "your_password",
-    "province": "广东省",
-    "city": "广州市",
-    "area": "天河区",
-    "address": "广东省 广州市 天河区 某某路 100 号",
-    "longitude": "113.324520",
-    "latitude": "23.102290",
+    "phone": "17887874506",
+    "password": "你的密码",
+    "province": "陕西省",
+    "city": "咸阳市",
+    "area": "兴平市",
+    "address": "兴平市永东包装有限公司",
+    "longitude": "108.432481",
+    "latitude": "34.270681",
     "randomLocation": true,
     "enable": true,
-    "desc": "日常实习打卡",
-    "pushKey": "your_pushplus_token"
+    "desc": "实习打卡"
   }
 ]
 ```
 
-### 第三步：开启 Actions 定时任务
-1. 点击仓库顶部的 **Actions** 标签栏。
-2. 如页面出现绿色确认按钮（`I understand my workflows, go ahead and enable them`），请点击以启用工作流。
-3. 在左侧选择 **GongXueYun Auto CheckIn & Report**，点击右侧的 **Run workflow** -> 选择打卡类型（START / END） -> 点击绿色 **Run workflow** 即可立即执行一次测试！
+#### 3. 一键运行与定时计划
+- **手动运行**：直接执行 `python gongxueyun_auto.py --mode auto`。
+- **定时任务**：可通过 Windows 任务计划程序添加 `run_task.ps1`，设定每天固定时间后台静默执行，错失开机后自动补打。
 
 ---
 
-## 💻 本地运行指南
+## ❓ 常见问题与排错指南 (FAQ)
 
-如果您希望在个人电脑或自己的 VPS 服务器上运行：
+### Q1: 运行日志提示 `304 平台监测到您的账户存在风险操作`？
+- **原因**：工学云服务端对海外 IP（如 GitHub Actions 所在的微软 Azure 美国机房）或机房代理设有风控，会拦截打卡并要求支付宝实名核验。
+- **解决**：
+  1. 日志中会自动输出支付宝核验直跳链接与单号，复制链接或扫描生成的二维码在手机支付宝中刷脸核验；
+  2. 核验通过后，将核验单号填入 GitHub Secrets 的 `OUT_REGISTER_NO`；
+  3. 或者直接在 Secrets 配置国内住宅/高匿代理 `PROXY_URL`。
 
-```bash
-# 1. 克隆仓库
-git clone https://github.com/lele050505/GongXueYunPass.git
-cd GongXueYunPass
+### Q2: 报错 `Failed to establish a new connection: [Errno 101] Network is unreachable: api.moguding.net:9000`？
+- **原因**：工学云使用的是非标 **9000 端口**。部分免费代理服务器会拦截非 80/443 的高位端口连接。请确保所使用的网络或代理开放了 9000 端口通信。
 
-# 2. 安装 Python 依赖
-pip install -r requirements.txt
-
-# 3. 复制并编辑配置文件
-cp user.json.example user.json
-# 编辑 user.json 填入您的打卡参数
-
-# 4. 运行打卡脚本
-python gongxueyun_auto.py
-```
+### Q3: 为什么同一天的单号第二次使用提示 `验证已过期`？
+- **原因**：工学云服务端的支付宝安全验证单号为**一次性核销令牌**，当成功完成一次打卡后该单号即被核销失效。下一次打卡若再次触发风控需获取新单号。
 
 ---
 
-## ⏰ 定时调度与打卡时间说明
+## 📄 免责声明
 
-GitHub Actions 工作流预设了每日两次自动执行（工作流使用 UTC 时间，北京时间需加 8 小时）：
-- **上午上班打卡**：北京时间 08:30 左右执行
-- **下午下班打卡**：北京时间 17:30 左右执行
-
-> 💡 如需调整时间，可直接编辑 `.github/workflows/clock.yml` 中的 `schedule -> cron` 表达式。
+1. 本项目仅供学习、研究 Python 爬虫、自动化测试及 GitHub Actions 流程编排使用。
+2. 请遵守所在高校与实习单位的相关考勤管理制度，合理合规使用，因违规使用造成的任何后果由使用者本人承担。
+3. 本项目严禁用于商业牟利及非法用途。
 
 ---
 
-## ⚠️ 免责声明
+## 🤝 致谢与贡献
 
-1. 本项目仅供学习交流 Python 网络编程、自动化测试与 GitHub Actions 使用，严禁用于任何商业牟利或非法用途。
-2. 使用本项目所造成的一切后果及损失均由使用者自行承担，开发者概不负责。
-3. 请自觉遵守国家法律法规及工学云平台使用规范。
-
----
-
-## 📄 开源许可证
-
-本项目基于 [MIT License](LICENSE) 开源协议分发。
+- 感谢开源社区对工学云/蘑菇钉 API 协议逆向与加解密算法研究的先驱贡献者。
+- 欢迎提交 Issue 与 Pull Request 共同改进！

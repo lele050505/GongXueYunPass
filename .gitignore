@@ -11,3 +11,8 @@ cv2/
 *.vbs
 *.ps1
 *.log
+*.lock
+*.txt
+*.png
+!user.json.example
+!requirements.txt

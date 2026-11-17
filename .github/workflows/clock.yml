@@ -4,15 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       sign_type:
-        description: '打卡类型 (START=上班, END=下班)'
-        required: true
-        default: 'END'
-        type: choice
-        options:
-          - END
-          - START
+        description: "打卡类型: START(上班) 或 END(下班)"
+        required: false
+        default: ""
   schedule:
-    - cron: "30 0,9 * * 1-6"
+    # 每天早晨 08:30 (UTC 00:30) 与 下午 17:30 (UTC 09:30) 运行
+    - cron: "30 0,9 * * *"
+
+permissions:
+  contents: write
+  issues: write
 
 jobs:
   checkin:
@@ -33,6 +34,8 @@ jobs:
 
       - name: Run checkin script
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIGN_TYPE: ${{ inputs.sign_type }}
           PHONE: ${{ secrets.PHONE }}
           PASSWORD: ${{ secrets.PASSWORD }}
           PROVINCE: ${{ secrets.PROVINCE }}
@@ -43,5 +46,10 @@ jobs:
           LATITUDE: ${{ secrets.LATITUDE }}
           DESCRIPTION: ${{ secrets.DESCRIPTION }}
           OUT_REGISTER_NO: ${{ secrets.OUT_REGISTER_NO }}
-          SIGN_TYPE: ${{ inputs.sign_type || 'END' }}
-        run: python gongxueyun_auto.py
+          SECRET: ${{ secrets.SECRET }}
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN || secrets.SECRET }}
+          SENDKEY: ${{ secrets.SENDKEY || secrets.SECRET }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+          PROXY_API_URL: ${{ secrets.PROXY_API_URL }}
+        run: python gongxueyun_auto.py --mode auto

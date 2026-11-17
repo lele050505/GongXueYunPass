@@ -50,6 +50,11 @@ def setup_proxy():
         print(f"[PROXY] Proxy configured successfully: {selected_proxy}")
     else:
         print("[PROXY] 直连模式（Direct Connection，直连工学云 9000 端口）")
+        try:
+            from modules.network_patch import apply_network_patch
+            apply_network_patch()
+        except Exception as e:
+            print(f"[NET_PATCH_WARN] 物理网卡补丁载入提示: {e}")
 
 def send_email(subject, content, recipient="jule85610@gmail.com"):
     smtp_password = os.getenv("SMTP_PASSWORD")
