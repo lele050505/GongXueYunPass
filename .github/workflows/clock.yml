@@ -7,6 +7,10 @@ on:
         description: "打卡类型: START(上班) 或 END(下班)"
         required: false
         default: ""
+      force_checkin:
+        description: "是否强制触发(测试验证码): true/false"
+        required: false
+        default: "false"
   schedule:
     # 每天早晨 08:30 (UTC 00:30) 与 下午 17:30 (UTC 09:30) 运行
     - cron: "30 0,9 * * *"
@@ -36,6 +40,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SIGN_TYPE: ${{ inputs.sign_type }}
+          FORCE_CHECKIN: ${{ inputs.force_checkin }}
           PHONE: ${{ secrets.PHONE }}
           PASSWORD: ${{ secrets.PASSWORD }}
           PROVINCE: ${{ secrets.PROVINCE }}

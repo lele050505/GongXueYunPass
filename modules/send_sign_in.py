@@ -61,9 +61,16 @@ def send_sign_in(user_info, timeout):
         else:
             signType = "START" if is_start else "END"
         # 检查是否已经打过卡，避免重复打卡, 不需要检查的话可以注释掉整个if块
-        if check_sign(token, signType, userId=userId, sign_info=sign_info) and not RepeatCheckIn:
+        force_checkin = os.environ.get("FORCE_CHECKIN", "").strip().lower() in ["1", "true", "yes"]
+        if check_sign(token, signType, userId=userId, sign_info=sign_info) and not RepeatCheckIn and not force_checkin:
+            msg_skipped = f"{user_info_prefix}今日已打过{sign_type_mapping[signType]}卡，无需重复打卡（任务正常跳过）。"
             dprint(f"{user_info_prefix}")
             print(f"已打过{sign_type_mapping[signType]}卡, 任务跳过。\n")
+            global_sign_results.append(msg_skipped)
+            from modules.msg_pusher import push_to_pushplus
+            push_key = user_info.get("pushKey") or os.environ.get("PUSHPLUS_TOKEN") or os.environ.get("SECRET")
+            if push_key:
+                push_to_pushplus([user_info], f"工学云{sign_type_mapping[signType]}打卡状态确认", msg_skipped, push_key)
             return
         dprint(f"{user_info_prefix}", end="")
         print(f"准备{sign_type_mapping[signType]}打卡\n")
