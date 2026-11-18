@@ -117,11 +117,21 @@ def dispatch_cloud_notice(out_no, reg_url, sign_type="打卡"):
     if push_key:
         try:
             pp_url = "https://www.pushplus.plus/send"
+            encoded_url = urllib.parse.quote(reg_url)
+            alipay_ds_url = f"https://ds.alipay.com/?scheme={encoded_url}"
+            pages_jump_url = f"https://lele050505.github.io/GongXueYunPass/jump.html?url={encoded_url}"
             content_html = (
-                f"<h3>工学云{sign_type}安全验证</h3>"
-                f"<p>检测到需要实名验证，请尽快点击下方链接：</p>"
-                f"<p><a href='{reg_url}'>👉 点击前往支付宝核验</a></p>"
-                f"<p>验证单号: {out_no}<br>后台将在180秒内自动轮询完成打卡。</p>"
+                f"<h3>工学云{sign_type}安全核验提醒</h3>"
+                f"<p style='color:#666;'>检测到需要支付宝人脸/实名验证，请在 180 秒内完成：</p>"
+                f"<div style='background:#f0f5ff;border:1px solid #adc6ff;border-radius:10px;padding:14px;margin:12px 0;text-align:center;'>"
+                f"  <a href='{alipay_ds_url}' style='display:inline-block;background:#1677ff;color:#ffffff;font-size:16px;font-weight:bold;padding:12px 24px;border-radius:24px;text-decoration:none;'>👉 点击直跳支付宝刷脸</a>"
+                f"</div>"
+                f"<div style='background:#fffbe6;border:1px solid #ffe58f;border-radius:8px;padding:10px 12px;margin:12px 0;font-size:13px;color:#ad6800;text-align:left;'>"
+                f"  <b>📌 备用跳转（中转页）：</b><br>"
+                f"  <a href='{pages_jump_url}'>👉 点此前往打卡中转页</a><br>"
+                f"  若微信提示被拦截，只需点击右上角 <b>【···】</b> 选择 <b>【在浏览器打开】</b> 即可秒进支付宝！"
+                f"</div>"
+                f"<p style='font-size:12px;color:#8c8c8c;'>验证单号: {out_no}<br>刷脸完成后后台将在数秒内自动打卡，无需其他操作。</p>"
             )
             r = requests.post(pp_url, json={
                 "token": push_key,
