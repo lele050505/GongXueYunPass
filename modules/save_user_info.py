@@ -116,7 +116,7 @@ def dispatch_cloud_notice(out_no, reg_url, sign_type="打卡"):
     push_key = os.getenv("PUSHPLUS_TOKEN") or os.getenv("SECRET") or ""
     if push_key:
         try:
-            pp_url = "http://www.pushplus.plus/send"
+            pp_url = "https://www.pushplus.plus/send"
             content_html = (
                 f"<h3>工学云{sign_type}安全验证</h3>"
                 f"<p>检测到需要实名验证，请尽快点击下方链接：</p>"
