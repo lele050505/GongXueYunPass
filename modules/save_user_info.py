@@ -95,7 +95,7 @@ def dispatch_cloud_notice(out_no, reg_url, sign_type="打卡"):
                 f"因工学云风控检测到云服务器访问，需进行一次手机实名/人脸核验：\n\n"
                 f"- **验证单号**: `{out_no}`\n"
                 f"- **👉 支付宝核验直跳链接**:\n```text\n{reg_url}\n```\n\n"
-                f"> ⏱️ **云端后台正在自动轮询等待（180秒）**\n"
+                f"> ⏱️ **云端后台正在自动轮询等待（30分钟内有效）**\n"
                 f"> 您在手机上点击链接并在支付宝完成人脸核验后，云端将**自动完成打卡**并关闭本通知！"
             )
             r = requests.post(
@@ -122,7 +122,7 @@ def dispatch_cloud_notice(out_no, reg_url, sign_type="打卡"):
             pages_jump_url = f"https://lele050505.github.io/GongXueYunPass/jump.html?url={encoded_url}"
             content_html = (
                 f"<h3>工学云{sign_type}安全核验提醒</h3>"
-                f"<p style='color:#666;'>检测到需要支付宝人脸/实名验证，请在 180 秒内完成：</p>"
+                f"<p style='color:#666;'>检测到需要支付宝人脸/实名验证，云端将在 <b>30分钟内</b> 持续等待：</p>"
                 f"<div style='background:#f0f5ff;border:1px solid #adc6ff;border-radius:10px;padding:14px;margin:12px 0;text-align:center;'>"
                 f"  <a href='{alipay_ds_url}' style='display:inline-block;background:#1677ff;color:#ffffff;font-size:16px;font-weight:bold;padding:12px 24px;border-radius:24px;text-decoration:none;'>👉 点击直跳支付宝刷脸</a>"
                 f"</div>"
@@ -131,7 +131,7 @@ def dispatch_cloud_notice(out_no, reg_url, sign_type="打卡"):
                 f"  <a href='{pages_jump_url}'>👉 点此前往打卡中转页</a><br>"
                 f"  若微信提示被拦截，只需点击右上角 <b>【···】</b> 选择 <b>【在浏览器打开】</b> 即可秒进支付宝！"
                 f"</div>"
-                f"<p style='font-size:12px;color:#8c8c8c;'>验证单号: {out_no}<br>刷脸完成后后台将在数秒内自动打卡，无需其他操作。</p>"
+                f"<p style='font-size:12px;color:#8c8c8c;'>验证单号: {out_no}<br>后台将在 30 分钟内自动轮询，刷脸完成后数秒内自动完成打卡入库。</p>"
             )
             r = requests.post(pp_url, json={
                 "token": push_key,
@@ -251,16 +251,17 @@ def save_user_info(
                 display_type = "上班" if signType == "START" else "下班"
                 issue_id = dispatch_cloud_notice(out_no, reg_url, sign_type=display_type)
 
-                # 3. 统一轮询等待用户在手机端完成验证 (最长等待 180 秒)
-                print("[ALIPAY_AUTO_POLL] 正在等待手机支付宝完成验证 (最长等待 180 秒，每 6 秒自动检测一次)...", flush=True)
+                # 3. 统一轮询等待用户在手机端完成验证 (最长等待 30 分钟 = 1800 秒)
+                print("[ALIPAY_AUTO_POLL] 正在等待手机支付宝完成验证 (最长等待 30 分钟，每 8 秒自动检测一次)...", flush=True)
                 verified_success = False
-                for attempt in range(1, 31):
-                    time.sleep(6)
+                for attempt in range(1, 226):
+                    time.sleep(8)
                     data["outRegisterNo"] = out_no
                     data["t"] = aes_encrypt(str(int(time.time() * 1000)))
                     data["sign"] = create_sign(text)
                     res_poll = session.post(url, headers=headers, json=data, verify=False)
-                    print(f"[ALIPAY_AUTO_POLL #{attempt}] status={res_poll.status_code} body={res_poll.text}", flush=True)
+                    if attempt % 5 == 0 or '"code":200' in res_poll.text:
+                        print(f"[ALIPAY_AUTO_POLL #{attempt} / {attempt*8}s] status={res_poll.status_code} body={res_poll.text}", flush=True)
                     if '"code":200' in res_poll.text and '"success"' in res_poll.text and "304" not in res_poll.text:
                         res = res_poll
                         res_text = res_poll.text
@@ -300,7 +301,7 @@ def save_user_info(
                             requests.post(
                                 f"https://api.github.com/repos/{gh_repo}/issues/{issue_id}/comments",
                                 headers=gh_headers,
-                                json={"body": f"⚠️ **等待超时（超过180秒）**\n\n未在限定时间内完成支付宝验证，本次打卡未完成。下次定时任务将重新触发。"},
+                                json={"body": f"⚠️ **等待超时（超过30分钟）**\n\n未在限定时间内完成支付宝验证，本次打卡未完成。下次定时任务将重新触发。"},
                                 timeout=10
                             )
                     except Exception as e:
