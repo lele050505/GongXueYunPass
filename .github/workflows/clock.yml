@@ -12,8 +12,13 @@ on:
         required: false
         default: "false"
   schedule:
-    # 每天早晨 09:30 (UTC 01:30) 与 下午 17:30 (UTC 09:30) 运行
+    # 考勤定时调度（已配置智能防漏打与强保底机制）：
+    # 1. 每天早晨 09:30 (UTC 01:30) 正常上班打卡
+    # 2. 每天上午 11:15 (UTC 03:15) 上班二次保底补签（若9:30已打过则智能秒跳过，未打过则发起补签）
+    # 3. 每天下午 17:30 (UTC 09:30) 正常下班打卡
+    # 4. 每天晚上 19:30 (UTC 11:30) 下班二次保底补签（若17:30已打过则智能秒跳过，未打过则发起补签）
     - cron: "30 1,9 * * *"
+    - cron: "15 3,11 * * *"
 
 permissions:
   contents: write
@@ -57,4 +62,6 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           PROXY_URL: ${{ secrets.PROXY_URL }}
           PROXY_API_URL: ${{ secrets.PROXY_API_URL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
         run: python gongxueyun_auto.py --mode auto
