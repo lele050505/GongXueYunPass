@@ -107,7 +107,7 @@ def get_available_weeks(user, token, plan_id, sign_info):
         print(f"[REPORT_WEEKS_WARN] 查询开放周次列表失败: {e}", flush=True)
     return []
 
-def submit_single_report(user, token, user_id, plan_id, job_id, student_id, report_type, title, content, weeks_str=None, user_week_num=None, yearmonth=None, start_time=None, end_time=None):
+def submit_single_report(user, token, user_id, plan_id, job_id, student_id, report_type, title, content, week_obj=None, user_week_num=None, yearmonth=None, start_time=None, end_time=None):
     """
     向工学云提交单篇报告 (周报 / 月报)，含自适应版本回退与严格请求体矩阵探测
     """
@@ -118,76 +118,130 @@ def submit_single_report(user, token, user_id, plan_id, job_id, student_id, repo
     lng = str(user.get("longitude", "")) if user.get("longitude") is not None else ""
     device = "Android"
 
+    # 提取周次相关元数据
+    weeks_str = ""
+    w_digits = ""
+    week_id = ""
+    if week_obj:
+        if isinstance(week_obj, dict):
+            weeks_str = week_obj.get("weeks") or week_obj.get("week") or ""
+            week_id = week_obj.get("id") or week_obj.get("weekId") or ""
+        else:
+            weeks_str = str(week_obj)
+        for ch in str(weeks_str):
+            if ch.isdigit():
+                w_digits += ch
+    if not w_digits and user_week_num:
+        w_digits = str(user_week_num)
+
+    # 生成内容三段式（content, summary, plan），覆盖高校端必填项
+    paragraphs = [p.strip() for p in content.split("\n") if p.strip()]
+    part_content = paragraphs[0] if len(paragraphs) > 0 else content
+    part_summary = paragraphs[1] if len(paragraphs) > 1 else "本周工作扎实推进，理论与实践结合紧密，基本达到了预期实习目标。"
+    part_plan = paragraphs[2] if len(paragraphs) > 2 else "下阶段将继续向带教老师虚心请教，加深业务实操技能，提高整体工作效率。"
+
     # 签名方案
     sign_std = create_sign(str(user_id) + "student")
     sign_act = create_sign(device + report_type + plan_id + str(user_id) + address)
-    sign_alt = create_sign(device + report_type + plan_id + str(user_id) + title)
-    signs_to_try = [sign_std, sign_act, sign_alt]
+    signs_to_try = [sign_std, sign_act]
 
+    # 优先使用真实响应的 v2/save 与 v5/save
     api_urls = [
-        f"{BASE_URL}/practice/paper/v5/save",
         f"{BASE_URL}/practice/paper/v2/save",
-        f"{BASE_URL}/practice/paper/v6/save",
+        f"{BASE_URL}/practice/paper/v5/save",
     ]
 
-    # 构造多种候选 payload 变体，彻底排除可能引发 500 的冗余字段或格式冲突
     num_type = "2" if report_type == "week" else "3"
 
     payload_variants = []
 
-    # 变体 1: 极简纯净版 (reportType=week/month，无多余 attachments/t/sign/state)
-    p1 = {
-        "planId": plan_id,
-        "title": title,
-        "content": content,
-        "reportType": report_type,
-    }
     if report_type == "week":
-        p1["weeks"] = str(weeks_str or f"第{user_week_num}周")
+        # 变体 1: 标准三段式 (含 summary, plan, weeks="第5周", week="第5周")
+        p1 = {
+            "planId": plan_id,
+            "title": title,
+            "content": content,
+            "summary": part_summary,
+            "plan": part_plan,
+            "reportType": "week",
+            "weeks": weeks_str or f"第{w_digits}周",
+            "week": weeks_str or f"第{w_digits}周",
+            "startTime": start_time,
+            "endTime": end_time,
+            "address": address,
+            "longitude": lng,
+            "latitude": lat,
+        }
+        if job_id:
+            p1["jobId"] = job_id
+        if student_id:
+            p1["studentId"] = student_id
+        if week_id:
+            p1["weekId"] = week_id
+            p1["id"] = week_id
+        payload_variants.append(("三段式完整体(字符周次)", p1))
+
+        # 变体 2: 纯数字周次三段式 (weeks=数字, week=数字)
+        p2 = p1.copy()
+        p2["weeks"] = w_digits
+        p2["week"] = w_digits
+        payload_variants.append(("三段式完整体(数字周次)", p2))
+
+        # 变体 3: 数字类型 reportType=2
+        p3 = p1.copy()
+        p3["reportType"] = "2"
+        payload_variants.append(("三段式数字类型(reportType=2)", p3))
+
+        # 变体 4: 极简双字段 (content + summary + plan)
+        p4 = {
+            "planId": plan_id,
+            "title": title,
+            "content": content,
+            "summary": part_summary,
+            "plan": part_plan,
+            "reportType": "week",
+            "weeks": weeks_str or f"第{w_digits}周",
+        }
+        payload_variants.append(("精简三段式", p4))
+
     else:
-        p1["yearmonth"] = yearmonth
-    payload_variants.append(("极简字符串类型", p1))
+        # 月报变体
+        m1 = {
+            "planId": plan_id,
+            "title": title,
+            "content": content,
+            "summary": part_summary,
+            "plan": part_plan,
+            "reportType": "month",
+            "yearmonth": yearmonth,
+            "yearMonth": yearmonth,
+            "startTime": start_time,
+            "endTime": end_time,
+            "address": address,
+            "longitude": lng,
+            "latitude": lat,
+        }
+        if job_id:
+            m1["jobId"] = job_id
+        if student_id:
+            m1["studentId"] = student_id
+        payload_variants.append(("月报三段式(reportType=month)", m1))
 
-    # 变体 2: 极简数字类型版 (reportType=2/3)
-    p2 = {
-        "planId": plan_id,
-        "title": title,
-        "content": content,
-        "reportType": num_type,
-    }
-    if report_type == "week":
-        p2["weeks"] = str(weeks_str or f"第{user_week_num}周")
-    else:
-        p2["yearmonth"] = yearmonth
-    payload_variants.append(("极简数字类型", p2))
+        m2 = m1.copy()
+        m2["reportType"] = "3"
+        payload_variants.append(("月报三段式(reportType=3)", m2))
 
-    # 变体 3: 带位置与起止时间完整版
-    p3 = p1.copy()
-    p3["address"] = address
-    p3["longitude"] = lng
-    p3["latitude"] = lat
-    if start_time and end_time:
-        p3["startTime"] = start_time
-        p3["endTime"] = end_time
-    payload_variants.append(("完整带位置与时间", p3))
-
-    # 变体 4: 带 jobId / studentId
-    p4 = p3.copy()
-    if job_id:
-        p4["jobId"] = job_id
-    if student_id:
-        p4["studentId"] = student_id
-    payload_variants.append(("带Job与StudentId", p4))
-
-    # 变体 5: 附带 attachments="" (空字符串)
-    p5 = p3.copy()
-    p5["attachments"] = ""
-    payload_variants.append(("带空串attachments", p5))
-
-    # 变体 6: 兼容双键 (type + reportType)
-    p6 = p3.copy()
-    p6["type"] = report_type
-    payload_variants.append(("双键兼容", p6))
+        m3 = {
+            "planId": plan_id,
+            "title": title,
+            "content": content,
+            "summary": part_summary,
+            "plan": part_plan,
+            "reportType": "month",
+            "yearmonth": yearmonth,
+            "yearMonth": yearmonth,
+        }
+        payload_variants.append(("月报精简三段式", m3))
 
     last_res = None
 
@@ -207,7 +261,7 @@ def submit_single_report(user, token, user_id, plan_id, job_id, student_id, repo
                 }
 
                 try:
-                    res = requests.post(api_url, json=p_data, headers=headers, verify=False, timeout=10)
+                    res = requests.post(api_url, json=p_data, headers=headers, verify=False, timeout=8)
                     res_json = res.json()
                     last_res = res_json
 
@@ -222,8 +276,6 @@ def submit_single_report(user, token, user_id, plan_id, job_id, student_id, repo
                     if "已经" in msg or "已存在" in msg or "重复" in msg:
                         print(f"[REPORT_SUBMIT_INFO] 报告提示: {msg}", flush=True)
                         return res_json
-
-                    # 若返回非 500（例如提示参数具体错误），则继续尝试下一个组合
                 except Exception as e:
                     last_res = {"code": 500, "msg": str(e)}
 
@@ -278,10 +330,11 @@ def auto_manage_reports(user, token, user_id):
             )
 
             print(f"[REPORT_MANAGER] 开始补交周报 [{title}]（系统周次: {w_str}, 日期: {w_start[:10]}~{w_end[:10]}）...", flush=True)
+            print(f"[REPORT_WEEK_RAW] 原始周次元数据: {json.dumps(w, ensure_ascii=False)}", flush=True)
             sub_res = submit_single_report(
                 user, token, user_id, plan_id, job_id, student_id, "week",
                 title=title, content=content,
-                weeks_str=w_str, user_week_num=user_week_index,
+                week_obj=w, user_week_num=user_week_index,
                 start_time=w_start, end_time=w_end
             )
             msg_res = sub_res.get("msg", "已处理")
