@@ -130,7 +130,7 @@ def get_available_weeks(user, token, plan_id, sign_info):
         print(f"[REPORT_WEEKS_WARN] 查询开放周次列表失败: {e}", flush=True)
     return []
 
-def submit_single_report(user, token, user_id, plan_id, job_id, student_id, report_type, title, content, week_obj=None, user_week_num=None, yearmonth=None, start_time=None, end_time=None):
+def submit_single_report(user, token, user_id, plan_id, job_id, student_id, report_type, title, content, user_week_num=None, yearmonth=None, start_time=None, end_time=None):
     """
     向工学云提交单篇报告 (周报 / 月报)，含自适应版本回退与严格请求体矩阵探测
     """
@@ -141,21 +141,9 @@ def submit_single_report(user, token, user_id, plan_id, job_id, student_id, repo
     lng = str(user.get("longitude", "")) if user.get("longitude") is not None else ""
     device = "Android"
 
-    # 提取周次相关元数据
-    weeks_str = ""
-    w_digits = ""
-    week_id = ""
-    if week_obj:
-        if isinstance(week_obj, dict):
-            weeks_str = week_obj.get("weeks") or week_obj.get("week") or ""
-            week_id = week_obj.get("id") or week_obj.get("weekId") or ""
-        else:
-            weeks_str = str(week_obj)
-        for ch in str(weeks_str):
-            if ch.isdigit():
-                w_digits += ch
-    if not w_digits and user_week_num:
-        w_digits = str(user_week_num)
+    # 周报周次严格使用用户确认的延续周次（第15周、第16周等），彻底避免与系统历史周次产生唯一索引冲突
+    target_week_str = f"第{user_week_num}周" if user_week_num else ""
+    w_digits = str(user_week_num) if user_week_num else ""
 
     # 生成内容三段式（content, summary, plan），覆盖高校端必填项
     paragraphs = [p.strip() for p in content.split("\n") if p.strip()]
@@ -174,12 +162,10 @@ def submit_single_report(user, token, user_id, plan_id, job_id, student_id, repo
         f"{BASE_URL}/practice/paper/v5/save",
     ]
 
-    num_type = "2" if report_type == "week" else "3"
-
     payload_variants = []
 
     if report_type == "week":
-        # 变体 1: 标准三段式 (含 summary, plan, weeks="第5周", week="第5周", userId)
+        # 变体 1: 标准三段式 (weeks="第15周", 完整时空数据)
         p1 = {
             "userId": user_id,
             "planId": plan_id,
@@ -188,35 +174,34 @@ def submit_single_report(user, token, user_id, plan_id, job_id, student_id, repo
             "summary": part_summary,
             "plan": part_plan,
             "reportType": "week",
-            "weeks": weeks_str or f"第{w_digits}周",
-            "week": weeks_str or f"第{w_digits}周",
+            "weeks": target_week_str,
+            "week": target_week_str,
             "startTime": start_time,
             "endTime": end_time,
             "address": address,
             "longitude": lng,
             "latitude": lat,
+            "attachment": "",
+            "attachments": "",
         }
         if job_id:
             p1["jobId"] = job_id
         if student_id:
             p1["studentId"] = student_id
-        if week_id:
-            p1["weekId"] = week_id
-            p1["id"] = week_id
-        payload_variants.append(("三段式完整体(字符周次)", p1))
+        payload_variants.append(("延续周次完整体(第15周)", p1))
 
-        # 变体 2: 纯数字周次三段式 (weeks=数字, week=数字)
+        # 变体 2: 纯数字周次三段式 (weeks="15", week="15")
         p2 = p1.copy()
         p2["weeks"] = w_digits
         p2["week"] = w_digits
-        payload_variants.append(("三段式完整体(数字周次)", p2))
+        payload_variants.append(("延续周次纯数字(15)", p2))
 
         # 变体 3: 数字类型 reportType=2
         p3 = p1.copy()
         p3["reportType"] = "2"
-        payload_variants.append(("三段式数字类型(reportType=2)", p3))
+        payload_variants.append(("数字类型reportType=2", p3))
 
-        # 变体 4: 极简双字段 (content + summary + plan)
+        # 变体 4: 精简三段式
         p4 = {
             "userId": user_id,
             "planId": plan_id,
@@ -225,7 +210,8 @@ def submit_single_report(user, token, user_id, plan_id, job_id, student_id, repo
             "summary": part_summary,
             "plan": part_plan,
             "reportType": "week",
-            "weeks": weeks_str or f"第{w_digits}周",
+            "weeks": target_week_str,
+            "attachment": "",
         }
         payload_variants.append(("精简三段式", p4))
 
@@ -246,6 +232,8 @@ def submit_single_report(user, token, user_id, plan_id, job_id, student_id, repo
             "address": address,
             "longitude": lng,
             "latitude": lat,
+            "attachment": "",
+            "attachments": "",
         }
         if job_id:
             m1["jobId"] = job_id
@@ -267,6 +255,7 @@ def submit_single_report(user, token, user_id, plan_id, job_id, student_id, repo
             "reportType": "month",
             "yearmonth": yearmonth,
             "yearMonth": yearmonth,
+            "attachment": "",
         }
         payload_variants.append(("月报精简三段式", m3))
 
@@ -276,30 +265,28 @@ def submit_single_report(user, token, user_id, plan_id, job_id, student_id, repo
         endpoint_name = api_url.split("/")[-2] + "/" + api_url.split("/")[-1]
         for p_name, p_data in payload_variants:
             for s_idx, current_sign in enumerate(signs_to_try):
-                base_h = {
+                headers = {
                     "roleKey": "student",
                     "version": "v6.0",
                     "appversion": "6.0.0",
                     "device": device,
                     "authorization": token,
                     "sign": current_sign,
+                    "content-type": "application/json; charset=utf-8",
                     "user-agent": "Dart/3.7 (dart:io)",
                 }
 
-                # 通道 A: 表单提交 (x-www-form-urlencoded)
                 try:
-                    h_form = base_h.copy()
-                    h_form["content-type"] = "application/x-www-form-urlencoded; charset=utf-8"
-                    res = requests.post(api_url, data=p_data, headers=h_form, verify=False, timeout=6)
+                    res = requests.post(api_url, json=p_data, headers=headers, verify=False, timeout=6)
                     res_json = res.json()
                     last_res = res_json
 
                     code = res_json.get("code")
                     msg = str(res_json.get("msg", ""))
-                    print(f"[REPORT_TRY] [{title}] -> {endpoint_name} (Form)[{p_name}] (签名{s_idx+1}): status={res.status_code}, code={code}, msg={msg}", flush=True)
+                    print(f"[REPORT_TRY] [{title}] -> {endpoint_name} [{p_name}] (签名{s_idx+1}): status={res.status_code}, code={code}, msg={msg}", flush=True)
 
                     if code == 200:
-                        print(f"[REPORT_SUBMIT_SUCCESS] 🎉 报告 [{title}] 提交成功！通道: {endpoint_name}(Form), 变体: {p_name}", flush=True)
+                        print(f"[REPORT_SUBMIT_SUCCESS] 🎉 报告 [{title}] 提交成功！通道: {endpoint_name}, 变体: {p_name}", flush=True)
                         return res_json
 
                     if "已经" in msg or "已存在" in msg or "重复" in msg:
@@ -308,27 +295,7 @@ def submit_single_report(user, token, user_id, plan_id, job_id, student_id, repo
                 except Exception as e:
                     last_res = {"code": 500, "msg": str(e)}
 
-                # 通道 B: JSON 提交 (application/json)
-                try:
-                    h_json = base_h.copy()
-                    h_json["content-type"] = "application/json; charset=utf-8"
-                    res = requests.post(api_url, json=p_data, headers=h_json, verify=False, timeout=6)
-                    res_json = res.json()
-                    last_res = res_json
-
-                    code = res_json.get("code")
-                    msg = str(res_json.get("msg", ""))
-                    print(f"[REPORT_TRY] [{title}] -> {endpoint_name} (JSON)[{p_name}] (签名{s_idx+1}): status={res.status_code}, code={code}, msg={msg}", flush=True)
-
-                    if code == 200:
-                        print(f"[REPORT_SUBMIT_SUCCESS] 🎉 报告 [{title}] 提交成功！通道: {endpoint_name}(JSON), 变体: {p_name}", flush=True)
-                        return res_json
-
-                    if "已经" in msg or "已存在" in msg or "重复" in msg:
-                        print(f"[REPORT_SUBMIT_INFO] 报告提示: {msg}", flush=True)
-                        return res_json
-                except Exception as e:
-                    last_res = {"code": 500, "msg": str(e)}
+    return last_res or {"code": 500, "msg": "提交失败"}
 
     return last_res or {"code": 500, "msg": "提交失败"}
 
@@ -385,7 +352,7 @@ def auto_manage_reports(user, token, user_id):
             sub_res = submit_single_report(
                 user, token, user_id, plan_id, job_id, student_id, "week",
                 title=title, content=content,
-                week_obj=w, user_week_num=user_week_index,
+                user_week_num=user_week_index,
                 start_time=w_start, end_time=w_end
             )
             msg_res = sub_res.get("msg", "已处理")
