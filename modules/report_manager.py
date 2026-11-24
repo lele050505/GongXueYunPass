@@ -4,7 +4,7 @@ import time
 import requests
 from datetime import datetime, timezone, timedelta
 from modules.map_headers import header_user_agent
-from modules.crypto_aes import create_sign
+from modules.crypto_aes import create_sign, aes_encrypt
 from modules.get_plan_id import get_plan_id
 from modules.ai_report_generator import generate_report_content
 
@@ -78,7 +78,7 @@ def get_available_weeks(user, token, plan_id, sign_info):
 
 def submit_single_report(user, token, plan_id, job_id, student_id, sign_info, report_type, title, content, weeks_str=None, user_week_num=None, yearmonth=None, start_time=None, end_time=None):
     """
-    向工学云提交单篇报告 (周报 / 月报)，含自适应版本回退与双键对齐
+    向工学云提交单篇报告 (周报 / 月报)，含自适应版本回退与时间戳加密防重放
     """
     headers = {
         "roleKey": "student",
@@ -92,50 +92,42 @@ def submit_single_report(user, token, plan_id, job_id, student_id, sign_info, re
     }
 
     address = user.get("address", "")
+    province = user.get("province", "")
+    city = user.get("city", "")
     lat = str(user.get("latitude", "")) if user.get("latitude") is not None else ""
     lng = str(user.get("longitude", "")) if user.get("longitude") is not None else ""
 
-    # 尝试不同端点版本：v6, v5, v2
     api_urls = [
-        f"{BASE_URL}/practice/paper/v6/save",
         f"{BASE_URL}/practice/paper/v5/save",
         f"{BASE_URL}/practice/paper/v2/save",
+        f"{BASE_URL}/practice/paper/v6/save",
     ]
 
-    # 提取周次数字
+    # 提取周次纯数字
     w_digits = ""
     if weeks_str:
         for ch in str(weeks_str):
             if ch.isdigit():
                 w_digits += ch
 
-    # 构造多种周次表达（字符串 "第5周"、纯数字字符串 "5"、整数 5、用户自然周 15 等）
     weeks_candidates = []
     if report_type == "week":
         if weeks_str:
-            weeks_candidates.append(str(weeks_str)) # 如 "第5周"
+            weeks_candidates.append(str(weeks_str)) # "第5周"
         if w_digits:
-            try:
-                weeks_candidates.append(int(w_digits)) # 如 整数 5
-            except Exception:
-                pass
-            weeks_candidates.append(w_digits) # 如 "5"
+            weeks_candidates.append(w_digits) # "5"
         if user_week_num:
-            weeks_candidates.append(f"第{user_week_num}周") # 如 "第15周"
-            weeks_candidates.append(int(user_week_num)) # 如 整数 15
+            weeks_candidates.append(f"第{user_week_num}周") # "第15周"
 
+    trials = weeks_candidates if report_type == "week" else [None]
     last_res = None
-    success = False
 
     for api_url in api_urls:
-        if success:
-            break
         endpoint_name = api_url.split("/")[-2] + "/" + api_url.split("/")[-1]
-
-        # 如果是周报，按周次候选依次测试；如果是月报，直接一次测试
-        trials = weeks_candidates if report_type == "week" else [None]
         for w_val in trials:
-            # 基础 payload 框架
+            # 注入时间戳密文 t 与 sign
+            t_ciphertext = aes_encrypt(str(int(time.time() * 1000)))
+
             payload = {
                 "planId": plan_id,
                 "jobId": job_id,
@@ -144,10 +136,15 @@ def submit_single_report(user, token, plan_id, job_id, student_id, sign_info, re
                 "reportType": report_type,
                 "title": title,
                 "content": content,
+                "province": province,
+                "city": city,
                 "address": address,
                 "longitude": lng,
                 "latitude": lat,
+                "state": "NORMAL",
                 "attachments": [],
+                "t": t_ciphertext,
+                "sign": sign_info,
             }
 
             if report_type == "week":
@@ -172,13 +169,11 @@ def submit_single_report(user, token, plan_id, job_id, student_id, sign_info, re
 
                 if res_json.get("code") == 200:
                     print(f"[REPORT_SUBMIT_SUCCESS] 🎉 报告 [{title}] 提交成功！通道: {endpoint_name}", flush=True)
-                    success = True
                     return res_json
 
                 msg = str(res_json.get("msg", ""))
                 if "已经" in msg or "已存在" in msg or "重复" in msg:
                     print(f"[REPORT_SUBMIT_INFO] 报告提示: {msg}", flush=True)
-                    success = True
                     return res_json
                 time.sleep(0.3)
             except Exception as e:
@@ -212,11 +207,11 @@ def auto_manage_reports(user, token, user_id):
             if w_start and w_start >= "2026-10-26":
                 unsubmitted_weeks.append(w)
 
-        # 按时间从早到晚正向排序（10-26~11-01, 11-02~11-08, 11-09~11-15, 11-16~11-22, 11-23~11-29）
+        # 按时间正向排序（10-26~11-01, 11-02~11-08, 11-09~11-15, 11-16~11-22, 11-23~11-29）
         unsubmitted_weeks.sort(key=lambda x: x.get("startTime", ""))
         print(f"[REPORT_MANAGER] 待补齐与提交的周报数量: {len(unsubmitted_weeks)} 篇", flush=True)
 
-        # 用户之前填到了第14周，接下来从第15周开始
+        # 用户此前填至第14周，接下来从第15周开始
         user_week_index = 15
         for w in unsubmitted_weeks:
             w_str = w.get("weeks") or ""
