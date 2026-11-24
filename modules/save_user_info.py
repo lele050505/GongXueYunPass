@@ -68,7 +68,7 @@ def popup_windows_notice(title, message, timeout_sec=12):
     except Exception:
         pass
 
-def dispatch_cloud_notice(out_no, reg_url, sign_type="打卡"):
+def dispatch_cloud_notice(out_no, reg_url, sign_type="打卡", is_refresh=False):
     """
     云端/本地多渠道即时推送实名核验链接：
     1. GitHub Issue 自动触发邮件和手机 App 推送 (无需额外密码)
@@ -89,14 +89,17 @@ def dispatch_cloud_notice(out_no, reg_url, sign_type="打卡"):
                 "User-Agent": "GongXueYun-Notifier"
             }
             issue_title = f"【工学云{sign_type}】请在手机上点击链接完成人脸安全验证"
+            if is_refresh:
+                issue_title = f"【工学云{sign_type}】验证已自动续期，请用最新链接完成人脸核验"
             issue_body = (
                 f"## 📱 工学云打卡安全验证提醒\n\n"
                 f"GitHub Actions 云端正在执行工学云 **{sign_type}** 任务。\n"
                 f"因工学云风控检测到云服务器访问，需进行一次手机实名/人脸核验：\n\n"
-                f"- **验证单号**: `{out_no}`\n"
+                f"- **最新验证单号**: `{out_no}`\n"
                 f"- **👉 支付宝核验直跳链接**:\n```text\n{reg_url}\n```\n\n"
-                f"> ⏱️ **云端后台正在自动轮询等待（30分钟内有效）**\n"
-                f"> 您在手机上点击链接并在支付宝完成人脸核验后，云端将**自动完成打卡**并关闭本通知！"
+                f"> ⏱️ **云端后台已开启长效自动续期（总计最长等待 30 分钟）**\n"
+                f"> 平台官方单号每 5 分钟失效一次，若过期云端将**自动刷新单号并更新通知**。\n"
+                f"> 您在手机上随时点击**最新链接**在支付宝完成人脸核验，云端将**自动完成打卡**并关闭本通知！"
             )
             r = requests.post(
                 f"https://api.github.com/repos/{gh_repo}/issues",
@@ -120,9 +123,10 @@ def dispatch_cloud_notice(out_no, reg_url, sign_type="打卡"):
             encoded_url = urllib.parse.quote(reg_url)
             alipay_ds_url = f"https://ds.alipay.com/?scheme={encoded_url}"
             pages_jump_url = f"https://lele050505.github.io/GongXueYunPass/jump.html?url={encoded_url}"
+            refresh_badge = "（已自动续期最新链接）" if is_refresh else ""
             content_html = (
-                f"<h3>工学云{sign_type}安全核验提醒</h3>"
-                f"<p style='color:#666;'>检测到需要支付宝人脸/实名验证，云端将在 <b>30分钟内</b> 持续等待：</p>"
+                f"<h3>工学云{sign_type}安全核验提醒{refresh_badge}</h3>"
+                f"<p style='color:#666;'>检测到需要支付宝人脸/实名验证，云端后台已开启 <b>自动续期轮询</b>（最长等待 30 分钟）：</p>"
                 f"<div style='background:#f0f5ff;border:1px solid #adc6ff;border-radius:10px;padding:14px;margin:12px 0;text-align:center;'>"
                 f"  <a href='{alipay_ds_url}' style='display:inline-block;background:#1677ff;color:#ffffff;font-size:16px;font-weight:bold;padding:12px 24px;border-radius:24px;text-decoration:none;'>👉 点击直跳支付宝刷脸</a>"
                 f"</div>"
@@ -131,11 +135,11 @@ def dispatch_cloud_notice(out_no, reg_url, sign_type="打卡"):
                 f"  <a href='{pages_jump_url}'>👉 点此前往打卡中转页</a><br>"
                 f"  若微信提示被拦截，只需点击右上角 <b>【···】</b> 选择 <b>【在浏览器打开】</b> 即可秒进支付宝！"
                 f"</div>"
-                f"<p style='font-size:12px;color:#8c8c8c;'>验证单号: {out_no}<br>后台将在 30 分钟内自动轮询，刷脸完成后数秒内自动完成打卡入库。</p>"
+                f"<p style='font-size:12px;color:#8c8c8c;'>最新单号: {out_no}<br>如超 5 分钟未刷脸，云端会自动刷新链接。请随时点击最新一条通知完成刷脸，刷脸后数秒内自动打卡入库。</p>"
             )
             r = requests.post(pp_url, json={
                 "token": push_key,
-                "title": f"工学云{sign_type}需要安全验证",
+                "title": f"工学云{sign_type}安全验证{refresh_badge}",
                 "content": content_html,
                 "template": "html"
             }, timeout=10)
@@ -216,14 +220,22 @@ def save_user_info(
         h2 = headers.copy()
         h2["client_id"] = "428a8310cd442757ae699df5d89vmgh"
         alipay_url = url.replace("/attendence/clock/v6/save", "/usercenter/alipay/v1/createAxdjk")
+
+        def fetch_new_alipay_ticket():
+            try:
+                r_create = session.post(alipay_url, headers=h2, json={}, verify=False)
+                j = r_create.json()
+                print(f"[ALIPAY_304_CREATE] {r_create.text}", flush=True)
+                if j.get("code") == 200 and isinstance(j.get("data"), dict):
+                    data_dict = j["data"]
+                    return data_dict.get("outRegisterNo"), data_dict.get("registerUrl")
+            except Exception as ex:
+                print(f"[ALIPAY_304_CREATE_ERROR] {ex}", flush=True)
+            return None, None
+
         try:
-            r2 = session.post(alipay_url, headers=h2, json={}, verify=False)
-            r2_json = r2.json()
-            print(f"[ALIPAY_304_CREATE] {r2.text}", flush=True)
-            if r2_json.get("code") == 200 and isinstance(r2_json.get("data"), dict):
-                reg_data = r2_json["data"]
-                out_no = reg_data.get("outRegisterNo")
-                reg_url = reg_data.get("registerUrl")
+            out_no, reg_url = fetch_new_alipay_ticket()
+            if out_no and reg_url:
                 latest_auth_info = {
                     "outRegisterNo": out_no,
                     "registerUrl": reg_url
@@ -249,19 +261,29 @@ def save_user_info(
 
                 # 2. 触发云端通知 (GitHub Issue 邮件 / PushPlus 微信 / Server酱)
                 display_type = "上班" if signType == "START" else "下班"
-                issue_id = dispatch_cloud_notice(out_no, reg_url, sign_type=display_type)
+                issue_id = dispatch_cloud_notice(out_no, reg_url, sign_type=display_type, is_refresh=False)
+                active_issue_ids = [issue_id] if issue_id else []
 
-                # 3. 统一轮询等待用户在手机端完成验证 (最长等待 30 分钟 = 1800 秒)
-                print("[ALIPAY_AUTO_POLL] 正在等待手机支付宝完成验证 (最长等待 30 分钟，每 8 秒自动检测一次)...", flush=True)
+                # 3. 统一轮询等待用户在手机端完成验证 (最长等待 30 分钟，遇单号过期自动无缝续期)
+                print("[ALIPAY_AUTO_POLL] 正在等待手机支付宝完成验证 (长效自动续期，最长等待 30 分钟，每 8 秒自动检测一次)...", flush=True)
                 verified_success = False
-                for attempt in range(1, 226):
+                current_ticket_start = time.time()
+                overall_start = time.time()
+
+                attempt = 0
+                while time.time() - overall_start < 1800:
+                    attempt += 1
                     time.sleep(8)
                     data["outRegisterNo"] = out_no
                     data["t"] = aes_encrypt(str(int(time.time() * 1000)))
                     data["sign"] = create_sign(text)
                     res_poll = session.post(url, headers=headers, json=data, verify=False)
+                    
                     if attempt % 5 == 0 or '"code":200' in res_poll.text:
-                        print(f"[ALIPAY_AUTO_POLL #{attempt} / {attempt*8}s] status={res_poll.status_code} body={res_poll.text}", flush=True)
+                        elapsed_total = int(time.time() - overall_start)
+                        print(f"[ALIPAY_AUTO_POLL #{attempt} / {elapsed_total}s] status={res_poll.status_code} body={res_poll.text}", flush=True)
+
+                    # 成功入库
                     if '"code":200' in res_poll.text and '"success"' in res_poll.text and "304" not in res_poll.text:
                         res = res_poll
                         res_text = res_poll.text
@@ -274,38 +296,73 @@ def save_user_info(
                         )
                         break
 
-                # 4. 若通过 GitHub Issue 发起通知，打卡完成后自动更新并关闭 Issue
+                    # 检测单号是否已在工学云服务端过期（或当前单号已持续超过 280 秒）
+                    ticket_age = time.time() - current_ticket_start
+                    is_expired = "验证已过期" in res_poll.text or ticket_age >= 280
+
+                    if is_expired and (time.time() - overall_start < 1700):
+                        print(f"[ALIPAY_AUTO_REFRESH] 检测到单号 {out_no} 已过期/临近过期 (已用时 {int(ticket_age)}s)，正在自动申请新单号...", flush=True)
+                        new_out_no, new_reg_url = fetch_new_alipay_ticket()
+                        if new_out_no and new_reg_url:
+                            out_no = new_out_no
+                            reg_url = new_reg_url
+                            current_ticket_start = time.time()
+                            latest_auth_info = {
+                                "outRegisterNo": out_no,
+                                "registerUrl": reg_url
+                            }
+                            persist_out_reg(out_no)
+                            print(f"[ALIPAY_AUTO_REFRESH] >>> 单号自动续期成功！最新单号: {out_no} <<<", flush=True)
+                            print(f"[ALIPAY_AUTO_REFRESH] 最新验证链接: {reg_url}", flush=True)
+
+                            # 重新推送最新通知
+                            new_issue_id = dispatch_cloud_notice(out_no, reg_url, sign_type=display_type, is_refresh=True)
+                            if new_issue_id:
+                                active_issue_ids.append(new_issue_id)
+                        else:
+                            print(f"[ALIPAY_AUTO_REFRESH_WARN] 申请新单号失败，将在下个周期重试", flush=True)
+
+                # 4. 若通过 GitHub Issue 发起通知，打卡完成后自动更新并关闭相关的 Issue
                 gh_token = os.getenv("GITHUB_TOKEN")
                 gh_repo = os.getenv("GITHUB_REPOSITORY")
-                if issue_id and gh_token and gh_repo:
+                if gh_token and gh_repo and active_issue_ids:
                     try:
                         gh_headers = {
                             "Authorization": f"token {gh_token}",
                             "Accept": "application/vnd.github.v3+json",
                             "User-Agent": "GongXueYun-Notifier"
                         }
-                        if verified_success:
-                            requests.post(
-                                f"https://api.github.com/repos/{gh_repo}/issues/{issue_id}/comments",
-                                headers=gh_headers,
-                                json={"body": f"✅ **工学云{display_type}打卡成功！**\n\n已检测到支付宝实名核验通过，后台已自动完成签到提交。"},
-                                timeout=10
-                            )
-                            requests.patch(
-                                f"https://api.github.com/repos/{gh_repo}/issues/{issue_id}",
-                                headers=gh_headers,
-                                json={"state": "closed"},
-                                timeout=10
-                            )
-                        else:
-                            requests.post(
-                                f"https://api.github.com/repos/{gh_repo}/issues/{issue_id}/comments",
-                                headers=gh_headers,
-                                json={"body": f"⚠️ **等待超时（超过30分钟）**\n\n未在限定时间内完成支付宝验证，本次打卡未完成。下次定时任务将重新触发。"},
-                                timeout=10
-                            )
+                        for single_issue_id in active_issue_ids:
+                            if verified_success:
+                                requests.post(
+                                    f"https://api.github.com/repos/{gh_repo}/issues/{single_issue_id}/comments",
+                                    headers=gh_headers,
+                                    json={"body": f"✅ **工学云{display_type}打卡成功！**\n\n已检测到支付宝实名核验通过，后台已自动完成签到提交。"},
+                                    timeout=10
+                                )
+                                requests.patch(
+                                    f"https://api.github.com/repos/{gh_repo}/issues/{single_issue_id}",
+                                    headers=gh_headers,
+                                    json={"state": "closed"},
+                                    timeout=10
+                                )
+                            else:
+                                requests.post(
+                                    f"https://api.github.com/repos/{gh_repo}/issues/{single_issue_id}/comments",
+                                    headers=gh_headers,
+                                    json={"body": f"⚠️ **等待超时（超过30分钟）**\n\n30分钟内未在手机上完成最新支付宝人脸验证，本次打卡任务已结束。"},
+                                    timeout=10
+                                )
+                                requests.patch(
+                                    f"https://api.github.com/repos/{gh_repo}/issues/{single_issue_id}",
+                                    headers=gh_headers,
+                                    json={"state": "closed"},
+                                    timeout=10
+                                )
                     except Exception as e:
-                        print(f"[CLOUD_NOTICE_WARN] 关闭 GitHub Issue 失败: {e}", flush=True)
+                        print(f"[CLOUD_NOTICE_WARN] 批量更新 GitHub Issue 失败: {e}", flush=True)
+        except Exception as e:
+            print(f"[ALIPAY_304_CREATE_ERROR] {e}", flush=True)
         except Exception as e:
             print(f"[ALIPAY_304_CREATE_ERROR] {e}", flush=True)
 
