@@ -113,22 +113,23 @@ def main():
 
     print(f"[CLOCK_API_RAW] Initializing GongXueYun Auto with mode={args.mode}")
 
-    # 1. 节假日智能跳过（周六除外打卡）检测
+    # 1. 节假日智能跳过（周六除外打卡）检测（报告模式不跳过）
     force_checkin = os.environ.get("FORCE_CHECKIN", "").strip().lower() in ["1", "true", "yes"]
-    try:
-        from modules.holiday_filter import check_workday_status
-        should_checkin, holiday_reason = check_workday_status()
-        print(f"[HOLIDAY_CHECK] {holiday_reason}", flush=True)
-        if not should_checkin and not force_checkin:
-            print(f"[HOLIDAY_CHECK] 任务跳过: {holiday_reason}")
-            # 推送一条休息日轻量提醒
-            compat_adapter.notify_all("工学云休息日提醒", f"📅 {holiday_reason}\n今日不执行自动打卡，祝您休息愉快！")
-            return
-    except Exception as e:
-        print(f"[HOLIDAY_CHECK_WARN] 节假日检测异常: {e}，默认继续执行打卡")
+    if args.mode != "report":
+        try:
+            from modules.holiday_filter import check_workday_status
+            should_checkin, holiday_reason = check_workday_status()
+            print(f"[HOLIDAY_CHECK] {holiday_reason}", flush=True)
+            if not should_checkin and not force_checkin:
+                print(f"[HOLIDAY_CHECK] 任务跳过: {holiday_reason}")
+                # 推送一条休息日轻量提醒
+                compat_adapter.notify_all("工学云休息日提醒", f"📅 {holiday_reason}\n今日不执行自动打卡，祝您休息愉快！")
+                return
+        except Exception as e:
+            print(f"[HOLIDAY_CHECK_WARN] 节假日检测异常: {e}，默认继续执行打卡")
 
     # 2. 拟人化随机延迟 (0~5 分钟随机抖动，避免秒级固定打卡特征)
-    if os.environ.get("GITHUB_ACTIONS") and not force_checkin:
+    if os.environ.get("GITHUB_ACTIONS") and not force_checkin and args.mode != "report":
         import random, time
         # 随机 10 到 180 秒微延迟
         delay_sec = random.randint(15, 150)
@@ -147,10 +148,21 @@ def main():
         print("[CLOCK_API_RAW] No valid user configuration found. Skipping sign-in.")
         return
 
-    clock_res = send_sign_in_threading(users)
-    print(f"[CLOCK_API_RAW] Clock/Sign-in result: {json.dumps(clock_res, ensure_ascii=False)}")
+    clock_res = {}
+    report_res = {}
 
-    report_res = submit_reports(users)
+    if args.mode == "report":
+        print("[CLOCK_API_RAW] 当前为周月报专项模式，跳过打卡直接执行周月报自动管理与补齐", flush=True)
+        clock_res = {"status": "skipped", "message": "Report mode"}
+        report_res = submit_reports(users)
+    elif args.mode == "clock":
+        clock_res = send_sign_in_threading(users)
+        print(f"[CLOCK_API_RAW] Clock/Sign-in result: {json.dumps(clock_res, ensure_ascii=False)}")
+        report_res = {"status": "skipped", "message": "Clock only mode"}
+    else:
+        clock_res = send_sign_in_threading(users)
+        print(f"[CLOCK_API_RAW] Clock/Sign-in result: {json.dumps(clock_res, ensure_ascii=False)}")
+        report_res = submit_reports(users)
 
     auth_notice = ""
     try:

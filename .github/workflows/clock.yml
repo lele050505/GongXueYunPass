@@ -3,6 +3,10 @@ name: GongXueYun Auto CheckIn & Report
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: "运行模式: auto(全自动), report(仅周月报), clock(仅打卡)"
+        required: false
+        default: "auto"
       sign_type:
         description: "打卡类型: START(上班) 或 END(下班)"
         required: false
@@ -64,4 +68,4 @@ jobs:
           PROXY_API_URL: ${{ secrets.PROXY_API_URL }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
-        run: python gongxueyun_auto.py --mode auto
+        run: python gongxueyun_auto.py --mode ${{ inputs.mode || 'auto' }}
