@@ -18,10 +18,13 @@ def get_job_info(user, token, plan_id, sign_info):
     url = f"{BASE_URL}/practice/job/v4/infoByStu"
     headers = {
         "roleKey": "student",
+        "version": "v6.0",
+        "appversion": "6.0.0",
+        "device": "Android",
         "authorization": token,
         "sign": sign_info,
-        "content-type": "application/json; charset=UTF-8",
-        "user-agent": header_user_agent(user),
+        "content-type": "application/json; charset=utf-8",
+        "user-agent": "Dart/3.7 (dart:io)",
     }
     try:
         res = requests.post(url, json={"planId": plan_id}, headers=headers, verify=False, timeout=10)
@@ -50,10 +53,13 @@ def get_available_weeks(user, token, plan_id, sign_info):
     url = f"{BASE_URL}/practice/paper/v3/getWeeks1"
     headers = {
         "roleKey": "student",
+        "version": "v6.0",
+        "appversion": "6.0.0",
+        "device": "Android",
         "authorization": token,
         "sign": sign_info,
-        "content-type": "application/json; charset=UTF-8",
-        "user-agent": header_user_agent(user),
+        "content-type": "application/json; charset=utf-8",
+        "user-agent": "Dart/3.7 (dart:io)",
     }
     try:
         res = requests.post(url, json={"planId": plan_id}, headers=headers, verify=False, timeout=10)
@@ -70,88 +76,111 @@ def get_available_weeks(user, token, plan_id, sign_info):
         print(f"[REPORT_WEEKS_WARN] 查询开放周次列表失败: {e}", flush=True)
     return []
 
-def submit_single_report(user, token, plan_id, job_id, student_id, sign_info, report_type, title, content, weeks_str=None, yearmonth=None, start_time=None, end_time=None):
+def submit_single_report(user, token, plan_id, job_id, student_id, sign_info, report_type, title, content, weeks_str=None, user_week_num=None, yearmonth=None, start_time=None, end_time=None):
     """
     向工学云提交单篇报告 (周报 / 月报)，含自适应版本回退与双键对齐
     """
     headers = {
         "roleKey": "student",
+        "version": "v6.0",
+        "appversion": "6.0.0",
+        "device": "Android",
         "authorization": token,
         "sign": sign_info,
-        "content-type": "application/json; charset=UTF-8",
-        "user-agent": header_user_agent(user),
+        "content-type": "application/json; charset=utf-8",
+        "user-agent": "Dart/3.7 (dart:io)",
     }
 
     address = user.get("address", "")
     lat = str(user.get("latitude", "")) if user.get("latitude") is not None else ""
     lng = str(user.get("longitude", "")) if user.get("longitude") is not None else ""
 
-    # 尝试不同端点版本：v5 (首选最新), v2 (兼容次级)
+    # 尝试不同端点版本：v6, v5, v2
     api_urls = [
+        f"{BASE_URL}/practice/paper/v6/save",
         f"{BASE_URL}/practice/paper/v5/save",
         f"{BASE_URL}/practice/paper/v2/save",
     ]
 
-    # 构造标准请求体（同时注入 type 与 reportType，避免后端空指针）
-    base_payload = {
-        "planId": plan_id,
-        "jobId": job_id,
-        "studentId": student_id,
-        "type": report_type,
-        "reportType": report_type,
-        "title": title,
-        "content": content,
-        "address": address,
-        "longitude": lng,
-        "latitude": lat,
-        "attachments": [],
-    }
+    # 提取周次数字
+    w_digits = ""
+    if weeks_str:
+        for ch in str(weeks_str):
+            if ch.isdigit():
+                w_digits += ch
 
+    # 构造多种周次表达（字符串 "第5周"、纯数字字符串 "5"、整数 5、用户自然周 15 等）
+    weeks_candidates = []
     if report_type == "week":
         if weeks_str:
-            base_payload["weeks"] = str(weeks_str)
-        if start_time and end_time:
-            base_payload["startTime"] = start_time
-            base_payload["endTime"] = end_time
-    elif report_type == "month":
-        if yearmonth:
-            base_payload["yearmonth"] = yearmonth
-            base_payload["yearMonth"] = yearmonth
-        if start_time and end_time:
-            base_payload["startTime"] = start_time
-            base_payload["endTime"] = end_time
-
-    # 候选变体
-    # 变体 A: 标准完整版 (带 attachments: [])
-    payload_a = base_payload.copy()
-    # 变体 B: 携带 formFieldDtoList: []
-    payload_b = base_payload.copy()
-    payload_b["formFieldDtoList"] = []
-    # 变体 C: 不带 attachments 键
-    payload_c = base_payload.copy()
-    payload_c.pop("attachments", None)
-
-    variants = [payload_a, payload_b, payload_c]
+            weeks_candidates.append(str(weeks_str)) # 如 "第5周"
+        if w_digits:
+            try:
+                weeks_candidates.append(int(w_digits)) # 如 整数 5
+            except Exception:
+                pass
+            weeks_candidates.append(w_digits) # 如 "5"
+        if user_week_num:
+            weeks_candidates.append(f"第{user_week_num}周") # 如 "第15周"
+            weeks_candidates.append(int(user_week_num)) # 如 整数 15
 
     last_res = None
+    success = False
+
     for api_url in api_urls:
-        for p_idx, payload in enumerate(variants):
+        if success:
+            break
+        endpoint_name = api_url.split("/")[-2] + "/" + api_url.split("/")[-1]
+
+        # 如果是周报，按周次候选依次测试；如果是月报，直接一次测试
+        trials = weeks_candidates if report_type == "week" else [None]
+        for w_val in trials:
+            # 基础 payload 框架
+            payload = {
+                "planId": plan_id,
+                "jobId": job_id,
+                "studentId": student_id,
+                "type": report_type,
+                "reportType": report_type,
+                "title": title,
+                "content": content,
+                "address": address,
+                "longitude": lng,
+                "latitude": lat,
+                "attachments": [],
+            }
+
+            if report_type == "week":
+                if w_val is not None:
+                    payload["weeks"] = w_val
+                if start_time and end_time:
+                    payload["startTime"] = start_time
+                    payload["endTime"] = end_time
+            elif report_type == "month":
+                if yearmonth:
+                    payload["yearmonth"] = yearmonth
+                    payload["yearMonth"] = yearmonth
+                if start_time and end_time:
+                    payload["startTime"] = start_time
+                    payload["endTime"] = end_time
+
             try:
-                res = requests.post(api_url, json=payload, headers=headers, verify=False, timeout=15)
+                res = requests.post(api_url, json=payload, headers=headers, verify=False, timeout=12)
                 res_json = res.json()
                 last_res = res_json
-                endpoint_name = api_url.split("/")[-2] + "/" + api_url.split("/")[-1]
-                print(f"[REPORT_TRY] [{title}] -> {endpoint_name} (变体{p_idx+1}): status={res.status_code}, code={res_json.get('code')}, msg={res_json.get('msg')}", flush=True)
+                print(f"[REPORT_TRY] [{title}] -> {endpoint_name} (weeks={w_val}): status={res.status_code}, code={res_json.get('code')}, msg={res_json.get('msg')}", flush=True)
 
                 if res_json.get("code") == 200:
                     print(f"[REPORT_SUBMIT_SUCCESS] 🎉 报告 [{title}] 提交成功！通道: {endpoint_name}", flush=True)
+                    success = True
                     return res_json
 
                 msg = str(res_json.get("msg", ""))
                 if "已经" in msg or "已存在" in msg or "重复" in msg:
                     print(f"[REPORT_SUBMIT_INFO] 报告提示: {msg}", flush=True)
+                    success = True
                     return res_json
-                time.sleep(0.5)
+                time.sleep(0.3)
             except Exception as e:
                 last_res = {"code": 500, "msg": str(e)}
 
@@ -176,21 +205,18 @@ def auto_manage_reports(user, token, user_id):
         open_weeks_data = get_available_weeks(user, token, plan_id, sign_info)
         print(f"[REPORT_MANAGER] 系统开放周次总数: {len(open_weeks_data)} 周", flush=True)
 
-        # 用户明确确认：周报填到了 2026年10月19日至2026年10月25日（对应系统开学第14周）
-        # 需补齐的周次为：所有 startTime >= '2026-10-26' 且未填报的周次
-        # 筛选并按照时间正序排列（从早到晚依次补齐，符合真实工作逻辑）
+        # 筛选待补齐周次：所有 startTime >= '2026-10-26'
         unsubmitted_weeks = []
         for w in open_weeks_data:
             w_start = w.get("startTime", "")
-            # 只处理 2026-10-26 之后的周次
             if w_start and w_start >= "2026-10-26":
                 unsubmitted_weeks.append(w)
 
-        # 按开始时间正向排序：2026-10-26, 2026-11-02, 2026-11-09, 2026-11-16, 2026-11-23
+        # 按时间从早到晚正向排序（10-26~11-01, 11-02~11-08, 11-09~11-15, 11-16~11-22, 11-23~11-29）
         unsubmitted_weeks.sort(key=lambda x: x.get("startTime", ""))
         print(f"[REPORT_MANAGER] 待补齐与提交的周报数量: {len(unsubmitted_weeks)} 篇", flush=True)
 
-        # 用户序号映射（用户端此前填至第14周，接下来依次为第15周、第16周...）
+        # 用户之前填到了第14周，接下来从第15周开始
         user_week_index = 15
         for w in unsubmitted_weeks:
             w_str = w.get("weeks") or ""
@@ -209,14 +235,15 @@ def auto_manage_reports(user, token, user_id):
             sub_res = submit_single_report(
                 user, token, plan_id, job_id, student_id, sign_info, "week",
                 title=title, content=content,
-                weeks_str=w_str, start_time=w_start, end_time=w_end
+                weeks_str=w_str, user_week_num=user_week_index,
+                start_time=w_start, end_time=w_end
             )
             msg_res = sub_res.get("msg", "已处理")
             results.append(f"周报【{title}】({w_start[:10]}~{w_end[:10]}): {msg_res}")
             user_week_index += 1
-            time.sleep(2)
+            time.sleep(1.5)
 
-        # 2. 检查月报补齐（用户明确确认：月报填到了 9 月，需补交 10 月和 11 月）
+        # 2. 补齐月报（用户填至 9 月，补交 10 月和 11 月）
         months_to_submit = [
             ("2026-10", "10月份实习月报总结", "2026-10-01 00:00:00", "2026-10-31 23:59:59"),
             ("2026-11", "11月份实习月报总结", "2026-11-01 00:00:00", "2026-11-30 23:59:59")
@@ -237,7 +264,7 @@ def auto_manage_reports(user, token, user_id):
             )
             m_msg = m_res.get("msg", "已处理")
             results.append(f"月报【{m_title}】: {m_msg}")
-            time.sleep(2)
+            time.sleep(1.5)
 
     except Exception as e:
         print(f"[REPORT_MANAGER_ERROR] 自动管理周月报异常: {e}", flush=True)
