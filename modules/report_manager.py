@@ -66,7 +66,7 @@ def get_submitted_history(token, user_id, plan_id):
     for ep in endpoints:
         for r_type in ["week", "month", "2", "3"]:
             try:
-                res = requests.post(ep, json={"planId": plan_id, "reportType": r_type, "currPage": 1, "pageSize": 5}, headers=headers, verify=False, timeout=8)
+                res = requests.post(ep, json={"userId": user_id, "planId": plan_id, "reportType": r_type, "currPage": 1, "pageSize": 5}, headers=headers, verify=False, timeout=8)
                 rj = res.json()
                 print(f"[REPORT_HIST_PROBE] {ep} ({r_type}): code={rj.get('code')}, msg={rj.get('msg')}", flush=True)
                 if rj.get("code") == 200:
@@ -156,8 +156,9 @@ def submit_single_report(user, token, user_id, plan_id, job_id, student_id, repo
     payload_variants = []
 
     if report_type == "week":
-        # 变体 1: 标准三段式 (含 summary, plan, weeks="第5周", week="第5周")
+        # 变体 1: 标准三段式 (含 summary, plan, weeks="第5周", week="第5周", userId)
         p1 = {
+            "userId": user_id,
             "planId": plan_id,
             "title": title,
             "content": content,
@@ -194,6 +195,7 @@ def submit_single_report(user, token, user_id, plan_id, job_id, student_id, repo
 
         # 变体 4: 极简双字段 (content + summary + plan)
         p4 = {
+            "userId": user_id,
             "planId": plan_id,
             "title": title,
             "content": content,
@@ -207,6 +209,7 @@ def submit_single_report(user, token, user_id, plan_id, job_id, student_id, repo
     else:
         # 月报变体
         m1 = {
+            "userId": user_id,
             "planId": plan_id,
             "title": title,
             "content": content,
@@ -232,6 +235,7 @@ def submit_single_report(user, token, user_id, plan_id, job_id, student_id, repo
         payload_variants.append(("月报三段式(reportType=3)", m2))
 
         m3 = {
+            "userId": user_id,
             "planId": plan_id,
             "title": title,
             "content": content,
