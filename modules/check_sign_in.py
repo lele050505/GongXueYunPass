@@ -1,5 +1,7 @@
+import time
 import requests
 from modules.load_config import dprint
+from modules.crypto_aes import create_sign, aes_encrypt
 from datetime import datetime, timezone, timedelta
 
 shanghai_tz = timezone(timedelta(hours=8))
@@ -10,20 +12,25 @@ def check_sign(check_sign_token, sign_type, userId=None, sign_info=None):
     check_sign_url = "https://api.moguding.net:9000/attendence/clock/v2/listSynchro"
     # 获取当天的打卡信息
     search_start_time, search_end_time = get_current_day()
+    today_prefix = search_start_time[:10]
     data = {
         "startTime": search_start_time,
         "endTime": search_end_time,
+        "t": aes_encrypt(str(int(time.time() * 1000))),
     }
     headers = {
         "Authorization": f"{check_sign_token}",
         "roleKey": "student",
+        "rolekey": "student",
         "user-agent": "Dart/3.7 (dart:io)",
-        "appversion": "6.0.0"
+        "appversion": "6.0.0",
+        "content-type": "application/json; charset=utf-8",
     }
+    if userId:
+        headers["userid"] = str(userId)
     if sign_info:
         headers["sign"] = sign_info
     elif userId:
-        from modules.crypto_aes import create_sign
         headers["sign"] = create_sign(str(userId) + "student")
 
     try:
@@ -33,15 +40,13 @@ def check_sign(check_sign_token, sign_type, userId=None, sign_info=None):
         dprint(f"查询打卡记录网络异常: {e}")
         return False
 
-    # ❗开发环境输出, 打印打卡记录的响应内容
-    # dprint(response_data)
-
-    # 检查是否有过打卡记录
+    # 检查是否有过当天的同类型打卡记录
     if not isinstance(response_data, dict) or 'data' not in response_data or not response_data['data']:
         return False
     for record in response_data["data"]:
-        if record["type"] == sign_type:
-            # 打过卡
+        rec_time = str(record.get("createTime", ""))
+        if record.get("type") == sign_type and (not rec_time or rec_time.startswith(today_prefix)):
+            # 当天已打过该类型卡
             return True
     # 没打过卡
     return False

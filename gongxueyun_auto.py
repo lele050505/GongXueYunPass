@@ -99,12 +99,14 @@ def submit_reports(users):
             res = auto_manage_reports(user, userInfo["token"], userInfo["userId"])
             print(f"[CLOCK_API_RAW] Report submission result: {json.dumps(res, ensure_ascii=False)}")
             return res
+        err_res = {"status": "error", "message": "登录未返回有效 token/userId，跳过周月报提交"}
+        print(f"[CLOCK_API_RAW] Report submission result: {json.dumps(err_res, ensure_ascii=False)}")
+        return err_res
     except Exception as e:
         print(f"[REPORT_SUBMIT_WARN] 自动提交报告流程异常: {e}")
-
-    report_res = {"status": "success", "message": "Weekly/Monthly report auto-submitted successfully"}
-    print(f"[CLOCK_API_RAW] Report submission result: {json.dumps(report_res, ensure_ascii=False)}")
-    return report_res
+        report_res = {"status": "error", "message": f"自动提交报告异常: {e}"}
+        print(f"[CLOCK_API_RAW] Report submission result: {json.dumps(report_res, ensure_ascii=False)}")
+        return report_res
 
 def main():
     parser = argparse.ArgumentParser(description="GongXueYun Pass Auto Clock & Report")

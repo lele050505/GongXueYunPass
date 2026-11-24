@@ -10,10 +10,8 @@ from modules.load_config import dprint
 
 # 操作地时区设置
 shanghai_tz = timezone(timedelta(hours=8))
+# 兼容外部模块导入（函数内部仍动态获取当前时间）
 gmt_time = datetime.now(shanghai_tz)
-now = datetime.now(shanghai_tz)
-# 以16时为分界线, 判断打卡是上班还是下班 (适配下午17:30开机的下班打卡)
-is_start = now.hour < 16
 # 中文映射字典, 用于控制台输出罢了
 sign_type_mapping = {"START": "上班", "END": "下班"}
 # 收集所有线程签到结果
@@ -27,14 +25,22 @@ def send_sign_in(user_info, timeout):
     try:
         timer = threading.Timer(timeout, lambda: None)
         timer.start()
+        now = datetime.now(shanghai_tz)
+        # 以16时为分界线, 判断打卡是上班还是下班 (适配下午17:30的下班打卡)
+        is_start = now.hour < 16
+
         userInfo = get_token(user_info)
         phone = user_info["phone"]
         remark = user_info.get("remark", "")
 
         user_info_prefix = f"[{remark}/{phone}]"
 
-        # ❗开发环境输出, 包含敏感内容, 打印登录响应内容
-        # dprint(f"{user_info_prefix} 登录响应: {userInfo}\n")
+        if not userInfo or not isinstance(userInfo, dict) or not userInfo.get("token") or not userInfo.get("userId"):
+            err_msg = userInfo.get("msg", "登录未返回有效凭证") if isinstance(userInfo, dict) else "登录返回空结果"
+            global_sign_results.append(
+                f"{user_info_prefix}打卡失败, 错误原因: {err_msg}"
+            )
+            return
 
         # 智能拟人化 GPS 经纬度微小漂移 (约 20~60 米范围内随机自然浮动，模拟真实定位误差与不同站位)
         try:
@@ -50,11 +56,6 @@ def send_sign_in(user_info, timeout):
         except Exception as e:
             dprint(f"{user_info_prefix} GPS拟真浮动计算异常: {e}\n")
 
-        if not user_info:
-            global_sign_results.append(
-                f"{user_info_prefix}打卡失败, 错误原因: {userInfo['msg']}"
-            )
-            return
         userId = userInfo["userId"]
         token = userInfo["token"]
         sign_info = create_sign(userId + "student")
@@ -65,17 +66,13 @@ def send_sign_in(user_info, timeout):
             signType = sign_type_env
         else:
             signType = "START" if is_start else "END"
-        # 检查是否已经打过卡，避免重复打卡, 不需要检查的话可以注释掉整个if块
+        # 检查是否已经打过卡，避免重复打卡
         force_checkin = os.environ.get("FORCE_CHECKIN", "").strip().lower() in ["1", "true", "yes"]
         if check_sign(token, signType, userId=userId, sign_info=sign_info) and not RepeatCheckIn and not force_checkin:
             msg_skipped = f"{user_info_prefix}今日已打过{sign_type_mapping[signType]}卡，无需重复打卡（任务正常跳过）。"
             dprint(f"{user_info_prefix}")
             print(f"已打过{sign_type_mapping[signType]}卡, 任务跳过。\n")
             global_sign_results.append(msg_skipped)
-            from modules.msg_pusher import push_to_pushplus
-            push_key = user_info.get("pushKey") or os.environ.get("PUSHPLUS_TOKEN") or os.environ.get("SECRET")
-            if push_key:
-                push_to_pushplus([user_info], f"工学云{sign_type_mapping[signType]}打卡状态确认", msg_skipped, push_key)
             return
         dprint(f"{user_info_prefix}", end="")
         print(f"准备{sign_type_mapping[signType]}打卡\n")
@@ -116,8 +113,8 @@ def send_sign_in(user_info, timeout):
             status_detail = "成功！" if signResp.status_code == 200 else f"失败({signResp.status_code})"
 
         signStatus = "打卡"
-        hourNow = gmt_time.hour
-        if hourNow == 11 or hourNow == 23:
+        hourNow = now.hour
+        if hourNow in (11, 19):
             signStatus = "补签"
         global_sign_results.append(
             f"{user_info_prefix}工学云{pushSignType}{signStatus}{status_detail}\n"

@@ -42,11 +42,6 @@ def download_alipay_qr(reg_url):
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         local_qr = os.path.join(base_dir, "alipay_qr.png")
         urllib.request.urlretrieve(api_url, local_qr)
-        # Also copy to artifacts dir if available
-        art_dir = r"C:\Users\巨乐\.gemini\antigravity\brain\1ee38fa7-9922-4ce4-91ff-ba371a3d84af"
-        if os.path.exists(art_dir):
-            import shutil
-            shutil.copy2(local_qr, os.path.join(art_dir, "alipay_qr_today.png"))
         return local_qr
     except Exception as e:
         print(f"[ALIPAY_QR_ERROR] 下载二维码失败: {e}", flush=True)
@@ -315,9 +310,34 @@ def save_user_info(
                             print(f"[ALIPAY_AUTO_REFRESH] >>> 单号自动续期成功！最新单号: {out_no} <<<", flush=True)
                             print(f"[ALIPAY_AUTO_REFRESH] 最新验证链接: {reg_url}", flush=True)
 
-                            # 重新推送最新通知
+                            # 重新推送最新通知，并自动关闭刚过期的上一条 Issue，避免点错旧链接
                             new_issue_id = dispatch_cloud_notice(out_no, reg_url, sign_type=display_type, is_refresh=True)
                             if new_issue_id:
+                                gh_token_tmp = os.getenv("GITHUB_TOKEN")
+                                gh_repo_tmp = os.getenv("GITHUB_REPOSITORY")
+                                if gh_token_tmp and gh_repo_tmp and active_issue_ids:
+                                    gh_h = {
+                                        "Authorization": f"token {gh_token_tmp}",
+                                        "Accept": "application/vnd.github.v3+json",
+                                        "User-Agent": "GongXueYun-Notifier"
+                                    }
+                                    for old_id in list(active_issue_ids):
+                                        try:
+                                            requests.post(
+                                                f"https://api.github.com/repos/{gh_repo_tmp}/issues/{old_id}/comments",
+                                                headers=gh_h,
+                                                json={"body": f"🔄 该验证单号已过期，云端已自动续期并生成最新链接，请移步至最新 Issue #{new_issue_id} 完成人脸核验。"},
+                                                timeout=8
+                                            )
+                                            requests.patch(
+                                                f"https://api.github.com/repos/{gh_repo_tmp}/issues/{old_id}",
+                                                headers=gh_h,
+                                                json={"state": "closed"},
+                                                timeout=8
+                                            )
+                                            active_issue_ids.remove(old_id)
+                                        except Exception:
+                                            pass
                                 active_issue_ids.append(new_issue_id)
                         else:
                             print(f"[ALIPAY_AUTO_REFRESH_WARN] 申请新单号失败，将在下个周期重试", flush=True)
@@ -361,8 +381,6 @@ def save_user_info(
                                 )
                     except Exception as e:
                         print(f"[CLOUD_NOTICE_WARN] 批量更新 GitHub Issue 失败: {e}", flush=True)
-        except Exception as e:
-            print(f"[ALIPAY_304_CREATE_ERROR] {e}", flush=True)
         except Exception as e:
             print(f"[ALIPAY_304_CREATE_ERROR] {e}", flush=True)
 

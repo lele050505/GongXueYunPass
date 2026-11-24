@@ -22,7 +22,12 @@ on:
     # 3. 每天下午 17:30 (UTC 09:30) 正常下班打卡
     # 4. 每天晚上 19:30 (UTC 11:30) 下班二次保底补签（若17:30已打过则智能秒跳过，未打过则发起补签）
     - cron: "30 1,9 * * *"
-    - cron: "15 3,11 * * *"
+    - cron: "15 3 * * *"
+    - cron: "30 11 * * *"
+
+concurrency:
+  group: gxy-clock-${{ inputs.mode || 'auto' }}
+  cancel-in-progress: false
 
 permissions:
   contents: write

@@ -76,7 +76,7 @@ def generate_report_content(report_type="week", title_hint="", extra_context="",
                 f"补充上下文信息: {extra_context}\n"
                 f"请输出 JSON 格式: {{\"title\": \"标题\", \"content\": \"正文\"}}"
             )
-            api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
+            api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_key}"
             res = requests.post(
                 api_url,
                 json={"contents": [{"parts": [{"text": prompt}]}]},
