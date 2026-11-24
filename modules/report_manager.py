@@ -76,26 +76,26 @@ def get_available_weeks(user, token, plan_id, sign_info):
         print(f"[REPORT_WEEKS_WARN] 查询开放周次列表失败: {e}", flush=True)
     return []
 
-def submit_single_report(user, token, plan_id, job_id, student_id, sign_info, report_type, title, content, weeks_str=None, user_week_num=None, yearmonth=None, start_time=None, end_time=None):
+def submit_single_report(user, token, user_id, plan_id, job_id, student_id, report_type, title, content, weeks_str=None, user_week_num=None, yearmonth=None, start_time=None, end_time=None):
     """
-    向工学云提交单篇报告 (周报 / 月报)，含自适应版本回退与时间戳加密防重放
+    向工学云提交单篇报告 (周报 / 月报)，含自适应版本回退与严格签名对齐
     """
-    headers = {
-        "roleKey": "student",
-        "version": "v6.0",
-        "appversion": "6.0.0",
-        "device": "Android",
-        "authorization": token,
-        "sign": sign_info,
-        "content-type": "application/json; charset=utf-8",
-        "user-agent": "Dart/3.7 (dart:io)",
-    }
-
     address = user.get("address", "")
     province = user.get("province", "")
     city = user.get("city", "")
     lat = str(user.get("latitude", "")) if user.get("latitude") is not None else ""
     lng = str(user.get("longitude", "")) if user.get("longitude") is not None else ""
+    device = "Android"
+
+    # 生成多种候选签名：
+    # 签名 A: 官方标准 save 签名 device + type + planId + userId + address
+    sign_a = create_sign(device + report_type + plan_id + str(user_id) + address)
+    # 签名 B: 学生常规签名 userId + "student"
+    sign_b = create_sign(str(user_id) + "student")
+    # 签名 C: 包含 title 的签名 device + type + planId + userId + title
+    sign_c = create_sign(device + report_type + plan_id + str(user_id) + title)
+
+    signs_to_try = [sign_a, sign_b, sign_c]
 
     api_urls = [
         f"{BASE_URL}/practice/paper/v5/save",
@@ -103,29 +103,22 @@ def submit_single_report(user, token, plan_id, job_id, student_id, sign_info, re
         f"{BASE_URL}/practice/paper/v6/save",
     ]
 
-    # 提取周次纯数字
-    w_digits = ""
-    if weeks_str:
-        for ch in str(weeks_str):
-            if ch.isdigit():
-                w_digits += ch
-
-    weeks_candidates = []
-    if report_type == "week":
-        if weeks_str:
-            weeks_candidates.append(str(weeks_str)) # "第5周"
-        if w_digits:
-            weeks_candidates.append(w_digits) # "5"
-        if user_week_num:
-            weeks_candidates.append(f"第{user_week_num}周") # "第15周"
-
-    trials = weeks_candidates if report_type == "week" else [None]
     last_res = None
 
     for api_url in api_urls:
         endpoint_name = api_url.split("/")[-2] + "/" + api_url.split("/")[-1]
-        for w_val in trials:
-            # 注入时间戳密文 t 与 sign
+        for s_idx, current_sign in enumerate(signs_to_try):
+            headers = {
+                "roleKey": "student",
+                "version": "v6.0",
+                "appversion": "6.0.0",
+                "device": device,
+                "authorization": token,
+                "sign": current_sign,
+                "content-type": "application/json; charset=utf-8",
+                "user-agent": "Dart/3.7 (dart:io)",
+            }
+
             t_ciphertext = aes_encrypt(str(int(time.time() * 1000)))
 
             payload = {
@@ -144,12 +137,12 @@ def submit_single_report(user, token, plan_id, job_id, student_id, sign_info, re
                 "state": "NORMAL",
                 "attachments": [],
                 "t": t_ciphertext,
-                "sign": sign_info,
+                "sign": current_sign,
             }
 
             if report_type == "week":
-                if w_val is not None:
-                    payload["weeks"] = w_val
+                if weeks_str:
+                    payload["weeks"] = str(weeks_str)
                 if start_time and end_time:
                     payload["startTime"] = start_time
                     payload["endTime"] = end_time
@@ -165,7 +158,7 @@ def submit_single_report(user, token, plan_id, job_id, student_id, sign_info, re
                 res = requests.post(api_url, json=payload, headers=headers, verify=False, timeout=12)
                 res_json = res.json()
                 last_res = res_json
-                print(f"[REPORT_TRY] [{title}] -> {endpoint_name} (weeks={w_val}): status={res.status_code}, code={res_json.get('code')}, msg={res_json.get('msg')}", flush=True)
+                print(f"[REPORT_TRY] [{title}] -> {endpoint_name} (签名方案{s_idx+1}): status={res.status_code}, code={res_json.get('code')}, msg={res_json.get('msg')}", flush=True)
 
                 if res_json.get("code") == 200:
                     print(f"[REPORT_SUBMIT_SUCCESS] 🎉 报告 [{title}] 提交成功！通道: {endpoint_name}", flush=True)
@@ -228,7 +221,7 @@ def auto_manage_reports(user, token, user_id):
 
             print(f"[REPORT_MANAGER] 开始补交周报 [{title}]（系统周次: {w_str}, 日期: {w_start[:10]}~{w_end[:10]}）...", flush=True)
             sub_res = submit_single_report(
-                user, token, plan_id, job_id, student_id, sign_info, "week",
+                user, token, user_id, plan_id, job_id, student_id, "week",
                 title=title, content=content,
                 weeks_str=w_str, user_week_num=user_week_index,
                 start_time=w_start, end_time=w_end
@@ -253,7 +246,7 @@ def auto_manage_reports(user, token, user_id):
             )
             print(f"[REPORT_MANAGER] 开始补交月报 [{m_title}]（月份: {ym}）...", flush=True)
             m_res = submit_single_report(
-                user, token, plan_id, job_id, student_id, sign_info, "month",
+                user, token, user_id, plan_id, job_id, student_id, "month",
                 title=m_title, content=content,
                 yearmonth=ym, start_time=m_start, end_time=m_end
             )
