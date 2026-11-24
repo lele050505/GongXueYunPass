@@ -1,30 +1,18 @@
 # 关键技术决策与技术结论
 
-## 工学云周报/月报接口规范
+## 历史周报/月报补齐与参数规范
 1. **统一安全签名防拦截**:
-   - `infoByStu`、`listByStu`、`getWeeks1` 与 `save` 接口必须在 Headers 中携带 `"sign": create_sign(str(userId) + "student")` 以及 `user-agent`。
-   - 若缺失 `sign` 头，工学云 WAF 会直接返回 `{"code":403,"msg":"非法请求，禁止访问:<IP>"}`，导致职位与历史报告信息均被阻断获取。
-2. **获取岗位信息**:
-   - 接口: `POST /practice/job/v4/infoByStu`
-   - 参数: `{"planId": plan_id}`
-   - 提取: `data.jobId` 或 `data.id`。提交报告时必须包含 `jobId`，否则报 500 参数有误。
-3. **已提交报告查询**:
-   - 接口: `POST /practice/paper/v2/listByStu`
-   - 参数: `{"planId": plan_id, "reportType": "week", "page": 1, "pageSize": 100}`
-   - 响应格式自适应兼容直接 `list` 与分页字典（`list` / `rows` / `records` 等）。
-4. **开放周次查询**:
-   - 接口: `POST /practice/paper/v3/getWeeks1`
-   - 参数: `{"planId": plan_id}`
-   - 提取开放的周次范围与周起始时间。
-5. **报告保存提交**:
-   - 接口: `POST /practice/paper/v5/save`
-   - 关键字段:
-     - `planId`: 实习计划ID
-     - `jobId`: 岗位ID
-     - `reportType`: `"week"` 或 `"month"`
-     - `title`: 报告标题
-     - `content`: 报告正文（不少于200字）
-     - `attachments`: `[]`（空数组，不可为字符串 `""`）
-     - `formFieldDtoList`: `[]`（空数组）
-     - 周报必须含 `weeks`（如 `"第1周"` 或 `1`）
-     - 月报必须含 `yearmonth`（如 `"2026-11"`）
+   - `infoByStu`、`getWeeks1` 与 `save` 接口必须在 Headers 中携带 `"sign": create_sign(str(userId) + "student")` 以及 `user-agent`。
+2. **用户实际历史锚点**:
+   - 周报已填报至第 14 周（`2026-10-19` 至 `2026-10-25`）；
+   - 待补齐周次列表（时间正序）：
+     - 第 15 周：`2026-10-26` ~ `2026-11-01`（系统第 5 周）
+     - 第 16 周：`2026-11-02` ~ `2026-11-08`（系统第 4 周）
+     - 第 17 周：`2026-11-09` ~ `2026-11-15`（系统第 3 周）
+     - 第 18 周：`2026-11-16` ~ `2026-11-22`（系统第 2 周）
+     - 第 19 周：`2026-11-23` ~ `2026-11-29`（系统当前活跃第 1 周）
+   - 月报已填报至 9 月，待补齐：10 月份月报（`2026-10`）与 11 月份月报（`2026-11`）。
+3. **关键参数与字数**:
+   - `save` 接口同时传入 `"type"` 与 `"reportType"` 避免后端空指针；
+   - 正文字数充实至 350~500 字（周报）和 550~700 字（月报），满足高校后台严格字数校验；
+   - 携带 `jobId`、`studentId`、`startTime` 与 `endTime`。
