@@ -36,14 +36,19 @@ def send_sign_in(user_info, timeout):
         # ❗开发环境输出, 包含敏感内容, 打印登录响应内容
         # dprint(f"{user_info_prefix} 登录响应: {userInfo}\n")
 
-        # 随机化经纬度
-        if user_info.get("randomLocation", False):
-            user_info["latitude"] = user_info["latitude"][0:-1] + str(
-                random.randint(0, 9)
-            )
-            user_info["longitude"] = user_info["longitude"][0:-1] + str(
-                random.randint(0, 9)
-            )
+        # 智能拟人化 GPS 经纬度微小漂移 (约 20~60 米范围内随机自然浮动，模拟真实定位误差与不同站位)
+        try:
+            base_lat = float(user_info.get("latitude", 0))
+            base_lng = float(user_info.get("longitude", 0))
+            if base_lat != 0 and base_lng != 0:
+                # 0.0001 纬度约等于 11 米；0.0001 经度约等于 9 米
+                delta_lat = random.uniform(-0.00035, 0.00035)
+                delta_lng = random.uniform(-0.00035, 0.00035)
+                user_info["latitude"] = f"{base_lat + delta_lat:.6f}"
+                user_info["longitude"] = f"{base_lng + delta_lng:.6f}"
+                dprint(f"{user_info_prefix} GPS拟真坐标微调: ({user_info['latitude']}, {user_info['longitude']})\n")
+        except Exception as e:
+            dprint(f"{user_info_prefix} GPS拟真浮动计算异常: {e}\n")
 
         if not user_info:
             global_sign_results.append(

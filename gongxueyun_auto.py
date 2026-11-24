@@ -95,6 +95,28 @@ def main():
 
     print(f"[CLOCK_API_RAW] Initializing GongXueYun Auto with mode={args.mode}")
 
+    # 1. 节假日智能跳过（周六除外打卡）检测
+    force_checkin = os.environ.get("FORCE_CHECKIN", "").strip().lower() in ["1", "true", "yes"]
+    try:
+        from modules.holiday_filter import check_workday_status
+        should_checkin, holiday_reason = check_workday_status()
+        print(f"[HOLIDAY_CHECK] {holiday_reason}", flush=True)
+        if not should_checkin and not force_checkin:
+            print(f"[HOLIDAY_CHECK] 任务跳过: {holiday_reason}")
+            # 推送一条休息日轻量提醒
+            compat_adapter.notify_all("工学云休息日提醒", f"📅 {holiday_reason}\n今日不执行自动打卡，祝您休息愉快！")
+            return
+    except Exception as e:
+        print(f"[HOLIDAY_CHECK_WARN] 节假日检测异常: {e}，默认继续执行打卡")
+
+    # 2. 拟人化随机延迟 (0~5 分钟随机抖动，避免秒级固定打卡特征)
+    if os.environ.get("GITHUB_ACTIONS") and not force_checkin:
+        import random, time
+        # 随机 10 到 180 秒微延迟
+        delay_sec = random.randint(15, 150)
+        print(f"[JITTER] 开启防风控拟人化时间随机抖动，随机延迟 {delay_sec} 秒后开始打卡...", flush=True)
+        time.sleep(delay_sec)
+
     setup_proxy()
 
     compat_adapter.ensure_user_env()
@@ -121,7 +143,7 @@ def main():
             auth_notice = (
                 f"\n\n【重要：工学云 304 安全风控提示】\n"
                 f"平台检测到异地/海外 IP 访问，需在手机支付宝完成一次实名验证：\n"
-                f"1. 验证单号: {out_no}\n"
+                f"1. 最新验证单号: {out_no}\n"
                 f"2. 支付宝直跳验证链接: {reg_url}\n"
                 f"（提示：若后续在 GitHub Secrets 配置国内 PROXY_URL，可避开海外 IP 风控直接打卡成功）"
             )
@@ -134,6 +156,13 @@ def main():
 
     email_subject = "工学云需要安全验证提醒" if auth_notice else "工学云自动打卡与报告结果通知"
     send_email(email_subject, notify_content, recipient="jule85610@gmail.com")
+
+    # 3. 自动清理与归档已超时的历史 Issue，保持仓库看板清爽干净
+    try:
+        from modules.clean_issues import clean_old_issues
+        clean_old_issues(keep_open_max=2)
+    except Exception as e:
+        print(f"[ISSUE_CLEAN_WARN] 清理历史 Issue 异常: {e}")
 
 if __name__ == "__main__":
     main()
