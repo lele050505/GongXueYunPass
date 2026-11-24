@@ -45,17 +45,16 @@ def get_job_info(user, token, plan_id, sign_info):
 
 def get_submitted_history(token, user_id, plan_id):
     """
-    查询用户此前已提交的历史周报与月报结构，打印并探测真实字段规范
+    查询用户此前已提交的历史周报与月报结构，打印并探测真实字段规范 (支持 Form 表单与 JSON 双通道)
     """
     sign_info = create_sign(str(user_id) + "student")
-    headers = {
+    base_headers = {
         "roleKey": "student",
         "version": "v6.0",
         "appversion": "6.0.0",
         "device": "Android",
         "authorization": token,
         "sign": sign_info,
-        "content-type": "application/json; charset=utf-8",
         "user-agent": "Dart/3.7 (dart:io)",
     }
     endpoints = [
@@ -65,15 +64,39 @@ def get_submitted_history(token, user_id, plan_id):
     ]
     for ep in endpoints:
         for r_type in ["week", "month", "2", "3"]:
+            payload = {
+                "userId": user_id,
+                "planId": plan_id,
+                "reportType": r_type,
+                "currPage": 1,
+                "pageSize": 5
+            }
+            # 1. 尝试 Form 表单通道 (x-www-form-urlencoded)
             try:
-                res = requests.post(ep, json={"userId": user_id, "planId": plan_id, "reportType": r_type, "currPage": 1, "pageSize": 5}, headers=headers, verify=False, timeout=8)
-                rj = res.json()
-                print(f"[REPORT_HIST_PROBE] {ep} ({r_type}): code={rj.get('code')}, msg={rj.get('msg')}", flush=True)
-                if rj.get("code") == 200:
-                    d = rj.get("data")
-                    print(f"[REPORT_HIST_DATA] 样例数据: {json.dumps(d, ensure_ascii=False)[:500]}", flush=True)
+                h_form = base_headers.copy()
+                h_form["content-type"] = "application/x-www-form-urlencoded; charset=utf-8"
+                res_f = requests.post(ep, data=payload, headers=h_form, verify=False, timeout=6)
+                rjf = res_f.json()
+                print(f"[REPORT_HIST_FORM] {ep} ({r_type}): code={rjf.get('code')}, msg={rjf.get('msg')}", flush=True)
+                if rjf.get("code") == 200:
+                    d = rjf.get("data")
+                    print(f"[REPORT_HIST_DATA_SUCCESS] Form通道成功获取历史报告: {json.dumps(d, ensure_ascii=False)[:600]}", flush=True)
                     return d
-            except Exception as e:
+            except Exception:
+                pass
+
+            # 2. 尝试 JSON 通道
+            try:
+                h_json = base_headers.copy()
+                h_json["content-type"] = "application/json; charset=utf-8"
+                res_j = requests.post(ep, json=payload, headers=h_json, verify=False, timeout=6)
+                rjj = res_j.json()
+                print(f"[REPORT_HIST_JSON] {ep} ({r_type}): code={rjj.get('code')}, msg={rjj.get('msg')}", flush=True)
+                if rjj.get("code") == 200:
+                    d = rjj.get("data")
+                    print(f"[REPORT_HIST_DATA_SUCCESS] JSON通道成功获取历史报告: {json.dumps(d, ensure_ascii=False)[:600]}", flush=True)
+                    return d
+            except Exception:
                 pass
     return None
 
@@ -253,28 +276,52 @@ def submit_single_report(user, token, user_id, plan_id, job_id, student_id, repo
         endpoint_name = api_url.split("/")[-2] + "/" + api_url.split("/")[-1]
         for p_name, p_data in payload_variants:
             for s_idx, current_sign in enumerate(signs_to_try):
-                headers = {
+                base_h = {
                     "roleKey": "student",
                     "version": "v6.0",
                     "appversion": "6.0.0",
                     "device": device,
                     "authorization": token,
                     "sign": current_sign,
-                    "content-type": "application/json; charset=utf-8",
                     "user-agent": "Dart/3.7 (dart:io)",
                 }
 
+                # 通道 A: 表单提交 (x-www-form-urlencoded)
                 try:
-                    res = requests.post(api_url, json=p_data, headers=headers, verify=False, timeout=8)
+                    h_form = base_h.copy()
+                    h_form["content-type"] = "application/x-www-form-urlencoded; charset=utf-8"
+                    res = requests.post(api_url, data=p_data, headers=h_form, verify=False, timeout=6)
                     res_json = res.json()
                     last_res = res_json
 
                     code = res_json.get("code")
                     msg = str(res_json.get("msg", ""))
-                    print(f"[REPORT_TRY] [{title}] -> {endpoint_name} [{p_name}] (签名{s_idx+1}): status={res.status_code}, code={code}, msg={msg}", flush=True)
+                    print(f"[REPORT_TRY] [{title}] -> {endpoint_name} (Form)[{p_name}] (签名{s_idx+1}): status={res.status_code}, code={code}, msg={msg}", flush=True)
 
                     if code == 200:
-                        print(f"[REPORT_SUBMIT_SUCCESS] 🎉 报告 [{title}] 提交成功！通道: {endpoint_name}, 变体: {p_name}", flush=True)
+                        print(f"[REPORT_SUBMIT_SUCCESS] 🎉 报告 [{title}] 提交成功！通道: {endpoint_name}(Form), 变体: {p_name}", flush=True)
+                        return res_json
+
+                    if "已经" in msg or "已存在" in msg or "重复" in msg:
+                        print(f"[REPORT_SUBMIT_INFO] 报告提示: {msg}", flush=True)
+                        return res_json
+                except Exception as e:
+                    last_res = {"code": 500, "msg": str(e)}
+
+                # 通道 B: JSON 提交 (application/json)
+                try:
+                    h_json = base_h.copy()
+                    h_json["content-type"] = "application/json; charset=utf-8"
+                    res = requests.post(api_url, json=p_data, headers=h_json, verify=False, timeout=6)
+                    res_json = res.json()
+                    last_res = res_json
+
+                    code = res_json.get("code")
+                    msg = str(res_json.get("msg", ""))
+                    print(f"[REPORT_TRY] [{title}] -> {endpoint_name} (JSON)[{p_name}] (签名{s_idx+1}): status={res.status_code}, code={code}, msg={msg}", flush=True)
+
+                    if code == 200:
+                        print(f"[REPORT_SUBMIT_SUCCESS] 🎉 报告 [{title}] 提交成功！通道: {endpoint_name}(JSON), 变体: {p_name}", flush=True)
                         return res_json
 
                     if "已经" in msg or "已存在" in msg or "重复" in msg:
