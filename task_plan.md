@@ -11,5 +11,5 @@
   - [x] 逆向破解工学云/蘑菇丁报告 API 全套规范：AES-128-ECB 密文时间戳 `t` 与官方对称签名
   - [x] 全面重构 `modules/report_manager.py`（支持 `v2/listByStu` 历史拉取与 `v5/save` 精准入库）
   - [x] 本地语法编译验证通过
-  - [/] 推送代码至 GitHub 并触发云端 Actions 执行全量补交
-  - [ ] 验证云端提交日志确认全部入库
+  - [x] 推送代码至 GitHub 并触发云端 Actions 执行全量补交
+  - [x] 验证云端提交日志：**全量 7 篇报告 100% 成功提交入库 (`code: 200, msg: success`)**
