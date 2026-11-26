@@ -5,11 +5,37 @@ import json
 import smtplib
 from email.mime.text import MIMEText
 from email.header import Header
+from urllib.parse import urlsplit
 
 import requests
 import compat_adapter
 from modules.load_config import load_config
 from modules.send_sign_in_threading import send_sign_in_threading
+
+def _mask_proxy_url(proxy_url: str) -> str:
+    """
+    脱敏代理 URL 中的认证凭据，防止账号密码以明文形式输出到日志
+    """
+    if not proxy_url:
+        return ""
+    try:
+        parsed = urlsplit(proxy_url)
+        if parsed.username is not None or parsed.password is not None:
+            host_port = parsed.hostname or ""
+            if parsed.port:
+                host_port = f"{host_port}:{parsed.port}"
+            scheme = f"{parsed.scheme}://" if parsed.scheme else ""
+            path = parsed.path or ""
+            return f"{scheme}***@{host_port}{path}"
+    except Exception:
+        pass
+    if "@" in proxy_url:
+        scheme_sep = proxy_url.find("://")
+        at_idx = proxy_url.rfind("@")
+        if scheme_sep != -1 and at_idx > scheme_sep:
+            return f"{proxy_url[:scheme_sep + 3]}***@{proxy_url[at_idx + 1:]}"
+        return f"***@{proxy_url[at_idx + 1:]}"
+    return proxy_url
 
 def setup_proxy():
     proxy_url = os.environ.get("PROXY_URL", "").strip()
@@ -34,20 +60,28 @@ def setup_proxy():
                 else:
                     selected_proxy = text if text.startswith("http") else f"http://{text}"
                 if selected_proxy:
-                    print(f"[PROXY] Obtained proxy from API: {selected_proxy}")
+                    print(f"[PROXY] Obtained proxy from API: {_mask_proxy_url(selected_proxy)}")
         except Exception as e:
             print(f"[PROXY] Failed to fetch proxy from API: {e}")
 
     if not selected_proxy and proxy_url:
         selected_proxy = proxy_url if (proxy_url.startswith("http") or proxy_url.startswith("socks")) else f"http://{proxy_url}"
-        print(f"[PROXY] Using static PROXY_URL: {selected_proxy}")
+        print(f"[PROXY] Using static PROXY_URL: {_mask_proxy_url(selected_proxy)}")
 
     if selected_proxy:
         os.environ["HTTP_PROXY"] = selected_proxy
         os.environ["HTTPS_PROXY"] = selected_proxy
         os.environ["http_proxy"] = selected_proxy
         os.environ["https_proxy"] = selected_proxy
-        print(f"[PROXY] Proxy configured successfully: {selected_proxy}")
+        existing_no_proxy = [item.strip() for item in os.environ.get("NO_PROXY", "").split(",") if item.strip()]
+        for host in ("api.github.com", "github.com", "localhost", "127.0.0.1"):
+            if host not in existing_no_proxy:
+                existing_no_proxy.append(host)
+        no_proxy_val = ",".join(existing_no_proxy)
+        os.environ["NO_PROXY"] = no_proxy_val
+        os.environ["no_proxy"] = no_proxy_val
+        print(f"[PROXY] Proxy configured successfully: {_mask_proxy_url(selected_proxy)}")
+        print(f"[PROXY] NO_PROXY configured: {no_proxy_val}")
     else:
         print("[PROXY] 直连模式（Direct Connection，直连工学云 9000 端口）")
         try:
